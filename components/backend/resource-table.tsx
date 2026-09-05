@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from "@/lib/quotations";
 import { cn } from "@/lib/utils";
 import type { BackendEntity, EntityField } from "@/lib/backend-entities";
+import type { ReferenceOptions } from "@/lib/reference-options";
 import {
   DataTable,
   EmptyRow,
@@ -43,6 +44,7 @@ export function ResourceTable({
   fields,
   rows,
   canWrite = false,
+  references = {},
 }: {
   /** Omit for a read-only view that has no CRUD endpoint behind it. */
   entity?: BackendEntity | null;
@@ -50,6 +52,8 @@ export function ResourceTable({
   fields: EntityField[];
   rows: ResourceRow[];
   canWrite?: boolean;
+  /** Choices for reference fields, keyed by field. */
+  references?: ReferenceOptions;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<ResourceRow | null>(null);
@@ -108,8 +112,16 @@ export function ResourceTable({
     }
   }
 
+  function labelFor(row: ResourceRow): string {
+    return fields
+      .slice(0, 2)
+      .map((field) => render(row, field, references[field.key]))
+      .filter((part) => part !== "—")
+      .join(" · ");
+  }
+
   async function remove(row: ResourceRow) {
-    const label = String(row[fields[0].key] ?? row.id);
+    const label = labelFor(row);
     if (!window.confirm(`Deactivate "${label}"? It stays on historic quotations.`)) {
       return;
     }
@@ -189,7 +201,7 @@ export function ResourceTable({
                     column === 0 ? "font-medium" : "text-muted-foreground",
                   )}
                 >
-                  {render(row, field)}
+                  {render(row, field, references[field.key])}
                 </Td>
               ))}
               <Td>
@@ -198,7 +210,7 @@ export function ResourceTable({
                     <button
                       type="button"
                       onClick={() => start(row)}
-                      aria-label={`Edit ${String(row[fields[0].key])}`}
+                      aria-label={`Edit ${labelFor(row)}`}
                       className="text-muted-foreground transition-colors hover:text-foreground"
                     >
                       <PencilSimpleIcon size={14} />
@@ -207,7 +219,7 @@ export function ResourceTable({
                       type="button"
                       onClick={() => remove(row)}
                       disabled={busyId === row.id || row.active === false}
-                      aria-label={`Deactivate ${String(row[fields[0].key])}`}
+                      aria-label={`Deactivate ${labelFor(row)}`}
                       className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-30"
                     >
                       <TrashIcon size={14} />
@@ -262,6 +274,28 @@ export function ResourceTable({
                         className="size-4 accent-indigo-500 disabled:opacity-60"
                       />
                     </span>
+                  ) : field.type === "reference" ? (
+                    <select
+                      value={draft[field.key] ?? ""}
+                      disabled={locked}
+                      onChange={(event) =>
+                        setDraft((d) => ({ ...d, [field.key]: event.target.value }))
+                      }
+                      className="h-8 rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60"
+                    >
+                      {/* Always offered, even on a required field: the API
+                          rejects the blank with the field's own name, which
+                          reads better than a dropdown that pre-picked something
+                          nobody chose. */}
+                      <option value="">
+                        {field.required ? "Choose…" : "None"}
+                      </option>
+                      {(references[field.key] ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   ) : field.type === "select" && field.options ? (
                     <select
                       value={draft[field.key] ?? ""}
@@ -290,6 +324,12 @@ export function ResourceTable({
                       className="h-8 rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60"
                     />
                   )}
+
+                  {field.hint ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      {field.hint}
+                    </span>
+                  ) : null}
                 </label>
               );
             })}
@@ -320,13 +360,24 @@ export function ResourceTable({
   );
 }
 
-function render(row: ResourceRow, field: EntityField): string {
+function render(
+  row: ResourceRow,
+  field: EntityField,
+  options?: { value: string; label: string }[],
+): string {
   const value = row[field.key];
 
   // A flag reads before the empty check: false is an answer, not a blank.
   if (field.type === "boolean") return value === true || value === "true" ? "Yes" : "No";
 
   if (value === null || value === undefined || value === "") return "—";
+
+  if (field.type === "reference") {
+    // An id with no match is a row pointing at something archived or deleted.
+    // Saying so beats printing a uuid the admin cannot act on.
+    const match = options?.find((option) => option.value === String(value));
+    return match ? match.label : "Unavailable";
+  }
 
   if (field.type === "number" && MONEY.has(field.key)) {
     return formatCurrency(Number(value));

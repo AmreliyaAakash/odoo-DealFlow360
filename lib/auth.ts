@@ -54,20 +54,25 @@ export async function currentRole(): Promise<Role | null> {
 }
 
 /**
- * Where a user lands after signing in. Each role goes straight to the screen it
- * spends its day on; `/` redirects here.
+ * Where a user lands after signing in.
+ *
+ * Every staff role now opens on the shared dashboard rather than its own desk.
+ * The desk screens still exist and are one tab away; what changed is that
+ * "where am I when I sign in" no longer depends on my title, so a rep and a
+ * manager describing the same screen to each other are describing the same
+ * screen. A customer has no dashboard, so they still land in the portal.
  */
 export const LANDING_BY_ROLE: Record<Role, string> = {
-  admin: "/admin",
-  manager: "/manager",
-  finance: "/finance",
-  rep: "/rep",
+  admin: "/dashboard",
+  manager: "/dashboard",
+  finance: "/dashboard",
+  rep: "/dashboard",
   customer: "/portal",
 };
 
-/** Reps have no role set until an admin assigns one, so default to the rep desk. */
+/** A signed-in user with no role yet still gets the dashboard, narrowed to their own deals. */
 export function landingPathForRole(role: Role | null): string {
-  return role ? LANDING_BY_ROLE[role] : "/rep";
+  return role ? LANDING_BY_ROLE[role] : "/dashboard";
 }
 
 export function isApprover(role: Role | null): role is ApproverRole {

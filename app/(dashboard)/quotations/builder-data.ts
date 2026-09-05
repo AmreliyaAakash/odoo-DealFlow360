@@ -1,7 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import type { DiscountRule } from "@/lib/business-logic";
+import type { DiscountRule, PriceListEntry } from "@/lib/business-logic";
 import { canWith, effectiveAccess, scopeWith } from "@/lib/permissions-server";
 import { PRODUCT_COLUMNS, type Product } from "@/lib/quotations";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -17,12 +17,14 @@ export type BuilderData = {
   catalog: Product[];
   plans: SubscriptionPlan[];
   discountRules: DiscountRule[];
+  /** Tier pricing, so the builder can re-price a cart the way the catalog does. */
+  priceLists: PriceListEntry[];
 };
 
 export async function loadBuilderData(): Promise<BuilderData> {
   const supabase = createServerSupabaseClient();
 
-  const [customers, products, plans, rules] = await Promise.all([
+  const [customers, products, plans, rules, priceLists] = await Promise.all([
     supabase
       .from("customers")
       .select("id, name, tier")
@@ -46,10 +48,30 @@ export async function loadBuilderData(): Promise<BuilderData> {
       .select("scope, scope_ref, customer_tier, max_discount_pct")
       .eq("active", true)
       .returns<DiscountRule[]>(),
+    // Both product-specific and catalogue-wide entries: `priceForTier` needs
+    // the fallback to answer for a product nobody wrote a rule for.
+    supabase
+      .from("price_lists")
+      .select("product_id, tier, currency, rule, amount")
+      .eq("active", true)
+      .returns<
+        {
+          product_id: string | null;
+          tier: PriceListEntry["tier"];
+          currency: string;
+          rule: PriceListEntry["rule"];
+          amount: number;
+        }[]
+      >(),
   ]);
 
   const failure =
-    customers.error ?? products.error ?? plans.error ?? rules.error ?? null;
+    customers.error ??
+    products.error ??
+    plans.error ??
+    rules.error ??
+    priceLists.error ??
+    null;
   if (failure) {
     throw new Error(`Failed to load the quotation builder: ${failure.message}`);
   }
@@ -59,6 +81,13 @@ export async function loadBuilderData(): Promise<BuilderData> {
     catalog: products.data ?? [],
     plans: plans.data ?? [],
     discountRules: rules.data ?? [],
+    priceLists: (priceLists.data ?? []).map((entry) => ({
+      productId: entry.product_id,
+      tier: entry.tier,
+      currency: entry.currency,
+      rule: entry.rule,
+      amount: Number(entry.amount),
+    })),
   };
 }
 

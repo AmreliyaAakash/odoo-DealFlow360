@@ -31,12 +31,33 @@ export type PortalQuote = {
   settled: boolean;
   /** Deepest discount currently on the quotation, so a counter can beat it. */
   maxDiscountPct: number;
+  /** What the customer asked for at confirmation, if anything. */
+  requestedDeliveryDate: string | null;
+  /** The account this quote belongs to, as the Profile tab shows it back. */
+  profile: PortalProfile;
   validUntil: string | null;
   notes: string | null;
   subtotal: number;
   discountTotal: number;
   netTotal: number;
   lines: PortalLine[];
+};
+
+/**
+ * The customer's own account details.
+ *
+ * Shown so a customer can check the quote is going to the right place before
+ * they confirm it — a wrong address found after confirmation is a shipment to
+ * chase, not a field to edit. Read-only here: changing an account is a
+ * conversation with the account manager, and the thread beside it is where that
+ * conversation already lives.
+ */
+export type PortalProfile = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  tier: string;
 };
 
 /** Sky is the portal's accent, distinct from every internal workspace. */

@@ -40,8 +40,12 @@ import {
 /** Once confirmed, the deal has a money side and the order panel appears. */
 const ORDERABLE_STATUSES = new Set(["won"]);
 
-/** Statuses a rep may still edit. Anything further along is read-only. */
-const EDITABLE_STATUSES = new Set(["draft", "returned"]);
+/**
+ * Statuses a rep may still edit: everything up to the desk actually saying yes.
+ * A quote waiting on an approver is still the rep's to correct — editing it
+ * re-opens the round server-side, so no earlier sign-off carries over.
+ */
+const EDITABLE_STATUSES = new Set(["draft", "returned", "pending_approval"]);
 
 type DecisionRow = {
   id: string;
@@ -58,6 +62,7 @@ type QuotationRow = {
   status: string | null;
   rep_id: string;
   customer_id: string | null;
+  submitted_at: string | null;
   net_total: number | null;
   margin_total: number | null;
   discount_total: number | null;
@@ -92,8 +97,8 @@ export default async function QuotationPage({
     supabase
       .from("quotations")
       .select(
-        `id, reference, status, rep_id, customer_id, net_total, margin_total,
-         discount_total, risk_score, required_approvals,
+        `id, reference, status, rep_id, customer_id, submitted_at,
+         net_total, margin_total, discount_total, risk_score, required_approvals,
          customers(id, name, tier),
          quotation_lines(id, product_id, qty, discount_pct, unit_price,
                          subscription_plan_id)`,
@@ -134,8 +139,20 @@ export default async function QuotationPage({
   // Who still owes a decision: a level this deal required that has not yet
   // approved. Rejections and returns end the round, so they leave nothing open.
   const decisionRows = decisionsResult.data ?? [];
+  // Only decisions from the current round count. An edit while the quote was in
+  // approval moves `submitted_at`, which is what makes an earlier approval stop
+  // counting — it was given on terms that no longer exist.
+  const roundStartedAt = quotation.submitted_at
+    ? new Date(quotation.submitted_at).getTime()
+    : 0;
   const approvedLevels = new Set(
-    decisionRows.filter((row) => row.action === "approve").map((row) => row.level),
+    decisionRows
+      .filter(
+        (row) =>
+          row.action === "approve" &&
+          new Date(row.decided_at).getTime() >= roundStartedAt,
+      )
+      .map((row) => row.level),
   );
   const outstanding =
     status === "pending_approval"
@@ -175,6 +192,7 @@ export default async function QuotationPage({
     id: quotation.id,
     customerId: quotation.customer_id,
     reference: quotation.reference,
+    status,
     lines: quotation.quotation_lines.map((line) => ({
       productId: line.product_id,
       qty: Number(line.qty),
@@ -240,6 +258,7 @@ export default async function QuotationPage({
           catalog={data.catalog}
           plans={data.plans}
           discountRules={data.discountRules}
+          priceLists={data.priceLists}
           draft={draft}
         />
       ) : (

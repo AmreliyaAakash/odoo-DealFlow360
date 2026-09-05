@@ -40,8 +40,19 @@ const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
  * A path with no entry here needs a session but no particular role.
  */
 const ROUTE_ROLES: { matcher: ReturnType<typeof createRouteMatcher>; roles: Role[] }[] = [
-  // Admin console and every backend config screen.
-  { matcher: createRouteMatcher(["/admin(.*)", "/backend(.*)"]), roles: ["admin"] },
+  // The admin console proper stays admin-only: it hands out permissions, so
+  // it cannot be governed by them.
+  { matcher: createRouteMatcher(["/admin(.*)"]), roles: ["admin"] },
+
+  // Config screens are opened to every staff role and narrowed by the matrix
+  // instead. Finance holds `warehouses` and `subscriptionPlans` in full, so a
+  // role list here was refusing people the matrix had already granted — and the
+  // sidebar, which filters on the matrix, was offering them the link. Each page
+  // still calls requireCapability and renders a refusal of its own.
+  {
+    matcher: createRouteMatcher(["/backend(.*)"]),
+    roles: ["rep", "manager", "finance", "admin"],
+  },
 
   { matcher: createRouteMatcher(["/manager(.*)"]), roles: ["manager", "admin"] },
   { matcher: createRouteMatcher(["/finance(.*)"]), roles: ["finance", "admin"] },
@@ -69,6 +80,24 @@ const ROUTE_ROLES: { matcher: ReturnType<typeof createRouteMatcher>; roles: Role
   },
   {
     matcher: createRouteMatcher(["/deal-health(.*)"]),
+    roles: ["rep", "manager", "finance", "admin"],
+  },
+
+  // The entity screens the whole desk shares. Every staff role may reach the
+  // URL; what they can actually see and do inside is the permission matrix's
+  // call, checked again on the page and once more by RLS. Keeping the guard
+  // broad here is deliberate — narrowing it by role would put the same entity
+  // at a different address depending on who asked, which is the layout this
+  // navigation was rebuilt to get away from.
+  {
+    matcher: createRouteMatcher([
+      "/dashboard",
+      "/fulfillment(.*)",
+      "/subscriptions(.*)",
+      "/invoices(.*)",
+      "/products(.*)",
+      "/discount-setup(.*)",
+    ]),
     roles: ["rep", "manager", "finance", "admin"],
   },
 

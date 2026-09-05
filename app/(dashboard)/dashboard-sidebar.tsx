@@ -5,13 +5,17 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import {
   ArrowsClockwiseIcon,
+  ArrowsCounterClockwiseIcon,
+  BriefcaseIcon,
   ChartBarIcon,
   ChartLineUpIcon,
+  CurrencyInrIcon,
   HeartbeatIcon,
   PackageIcon,
   PercentIcon,
   ReceiptIcon,
   SealCheckIcon,
+  StackIcon,
   SparkleIcon,
   SquaresFourIcon,
   TruckIcon,
@@ -39,19 +43,53 @@ type Item = {
   module?: Module;
 };
 
-const REP_NAV: Item[] = [
-  { href: "/rep", label: "Dashboard", icon: SquaresFourIcon },
+/**
+ * One navigation for the whole product, not one per role.
+ *
+ * Every entity is a tab, and every tab opens a list screen whose rows open a
+ * detail screen. What a given account actually sees is decided by the same
+ * permission matrix the API enforces — a rep opening this gets Quotations,
+ * Upsell and Deal Health, and no amount of knowing the URL gets them Invoices.
+ *
+ * The alternative, a bespoke nav per role, is what produced the old layout where
+ * Fulfilment lived under /finance and Products under /backend: the same entity
+ * had a different address depending on who was looking at it.
+ */
+const ENTITY_NAV: Item[] = [
   {
     href: "/quotations",
-    label: "My Quotations",
+    label: "Quotations",
     icon: ReceiptIcon,
+    prefix: "/quotations",
     module: "quotationBuilder",
   },
   {
-    href: "/rep/upsell",
-    label: "Upsell Suggestions",
-    icon: SparkleIcon,
-    module: "upsellPanel",
+    href: "/approvals",
+    label: "Approvals",
+    icon: SealCheckIcon,
+    prefix: "/approvals",
+    module: "approvals",
+  },
+  {
+    href: "/fulfillment",
+    label: "Fulfillment",
+    icon: TruckIcon,
+    prefix: "/fulfillment",
+    module: "warehouseSplit",
+  },
+  {
+    href: "/subscriptions",
+    label: "Subscriptions",
+    icon: ArrowsClockwiseIcon,
+    prefix: "/subscriptions",
+    module: "billing",
+  },
+  {
+    href: "/invoices",
+    label: "Invoices",
+    icon: CurrencyInrIcon,
+    prefix: "/invoices",
+    module: "billing",
   },
   {
     href: "/deal-health",
@@ -59,64 +97,29 @@ const REP_NAV: Item[] = [
     icon: HeartbeatIcon,
     module: "dealHealth",
   },
-];
-
-const APPROVER_NAV: Item[] = [
-  { href: "/manager", label: "Dashboard", icon: SquaresFourIcon },
   {
-    href: "/approvals",
-    label: "Pending Approvals",
-    icon: SealCheckIcon,
-    module: "approvals",
-  },
-  { href: "/manager/pipeline", label: "Team Pipeline", icon: UsersThreeIcon },
-  {
-    href: "/deal-health",
-    label: "Deal Health & Anomalies",
-    icon: HeartbeatIcon,
-    module: "dealHealth",
-  },
-];
-
-const FINANCE_NAV: Item[] = [
-  { href: "/finance", label: "Dashboard", icon: SquaresFourIcon },
-  {
-    href: "/approvals",
-    label: "Finance Approvals",
-    icon: SealCheckIcon,
-    module: "approvals",
+    href: "/reports",
+    label: "Reports",
+    icon: ChartBarIcon,
+    module: "reports",
   },
   {
-    href: "/finance/fulfillment",
-    label: "Fulfillment",
-    icon: TruckIcon,
-    module: "warehouseSplit",
-  },
-  {
-    href: "/finance/billing",
-    label: "Subscriptions & Billing",
-    icon: ArrowsClockwiseIcon,
-    module: "billing",
-  },
-  {
-    href: "/finance/warehouses",
-    label: "Warehouses",
-    icon: WarehouseIcon,
-    module: "warehouses",
-  },
-];
-
-const ADMIN_NAV: Item[] = [
-  { href: "/admin", label: "Dashboard", icon: SquaresFourIcon },
-  {
-    href: "/backend/products",
+    href: "/products",
     label: "Products",
     icon: PackageIcon,
+    prefix: "/products",
     module: "products",
   },
+];
+
+/**
+ * Desk setup. Split out because it is administration rather than daily work,
+ * and because grouping it keeps the entity tabs above readable.
+ */
+const CONFIG_NAV: Item[] = [
   {
-    href: "/backend/discount-rules",
-    label: "Discount Rules",
+    href: "/discount-setup",
+    label: "Discount & Approvals",
     icon: PercentIcon,
     module: "discountRules",
   },
@@ -124,6 +127,18 @@ const ADMIN_NAV: Item[] = [
     href: "/backend/warehouses",
     label: "Warehouses",
     icon: WarehouseIcon,
+    module: "warehouses",
+  },
+  {
+    href: "/backend/stock",
+    label: "Stock Levels",
+    icon: StackIcon,
+    module: "warehouses",
+  },
+  {
+    href: "/backend/replenishment",
+    label: "Reorder Rules",
+    icon: ArrowsCounterClockwiseIcon,
     module: "warehouses",
   },
   {
@@ -138,25 +153,44 @@ const ADMIN_NAV: Item[] = [
     icon: SparkleIcon,
     module: "upsellRules",
   },
-  { href: "/admin/users", label: "Users & Roles", icon: UsersThreeIcon },
 ];
 
-const REPORTS: Item = {
-  href: "/reports",
-  label: "Reports",
-  icon: ChartBarIcon,
-  module: "reports",
+/** The rep's own tool, which is not an entity anybody else browses. */
+const UPSELL: Item = {
+  href: "/rep/upsell",
+  label: "Upsell Suggestions",
+  icon: SparkleIcon,
+  module: "upsellPanel",
+};
+
+/** What each desk tab is called, in that role's own words. */
+const DESK_LABELS: Record<string, string> = {
+  rep: "My Desk",
+  manager: "Manager Desk",
+  finance: "Finance Desk",
+  admin: "Admin Desk",
+};
+
+/** Admin-only, and not gated by a module: it is how modules are handed out. */
+const USERS: Item = {
+  href: "/admin/users",
+  label: "Users & Roles",
+  icon: UsersThreeIcon,
 };
 
 /**
- * One workspace per role: the rep desk (indigo), the approver desk (amber), the
- * finance desk (emerald) and the admin desk (violet). Accent classes are whole
- * strings so Tailwind's scanner can see them.
+ * The look of each desk, and where its Dashboard tab goes.
+ *
+ * Navigation is no longer part of this: every role now walks the same entity
+ * list and sees the subset its permissions allow. What stays per role is the
+ * accent — rep indigo, approver amber, finance emerald, admin violet — and the
+ * home screen the Dashboard tab opens. Accent classes are whole strings so
+ * Tailwind's scanner can see them.
  */
 const WORKSPACES = {
   rep: {
-    nav: REP_NAV,
-    home: "/rep",
+    home: "/dashboard",
+    desk: "/rep",
     /** Only the rep desk shows their personal deal rail. */
     showPipeline: true,
     cta: {
@@ -170,8 +204,8 @@ const WORKSPACES = {
     button: "bg-indigo-500 hover:bg-indigo-400",
   },
   manager: {
-    nav: APPROVER_NAV,
-    home: "/manager",
+    home: "/dashboard",
+    desk: "/manager",
     showPipeline: false,
     cta: {
       href: "/approvals",
@@ -184,8 +218,8 @@ const WORKSPACES = {
     button: "bg-amber-500 hover:bg-amber-400",
   },
   finance: {
-    nav: FINANCE_NAV,
-    home: "/finance",
+    home: "/dashboard",
+    desk: "/finance",
     showPipeline: false,
     cta: {
       href: "/finance/fulfillment",
@@ -198,8 +232,8 @@ const WORKSPACES = {
     button: "bg-emerald-500 hover:bg-emerald-400",
   },
   admin: {
-    nav: ADMIN_NAV,
-    home: "/admin",
+    home: "/dashboard",
+    desk: "/admin",
     showPipeline: false,
     cta: {
       href: "/backend/products",
@@ -240,11 +274,31 @@ export function DashboardSidebar({
 
   const workspace = workspaceFor(role);
 
+  const allowed = (item: Item) =>
+    item.module === undefined || canView(item.module);
+
   // Filtered by the access the server resolved, so an account granted an extra
   // module sees its link, and one that had a module revoked does not.
-  const items = [...workspace.nav, REPORTS].filter(
-    (item) => item.module === undefined || canView(item.module),
-  );
+  const dashboard: Item = {
+    href: workspace.home,
+    label: "Dashboard",
+    icon: SquaresFourIcon,
+  };
+  // The role's own desk keeps a tab of its own. The shared Dashboard above is
+  // a summary; the desk screens carry the rails, charts and controls that only
+  // make sense for one role, and folding them together would either bury them
+  // or show a rep a finance chart they cannot act on.
+  const desk: Item = {
+    href: workspace.desk,
+    label: DESK_LABELS[role ?? "rep"],
+    icon: BriefcaseIcon,
+  };
+
+  const items = [dashboard, desk, ...ENTITY_NAV, UPSELL].filter(allowed);
+  const config = [
+    ...CONFIG_NAV,
+    ...(role === "admin" ? [USERS] : []),
+  ].filter(allowed);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col self-start rounded-xl bg-card p-3 ring-1 ring-foreground/10 lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)]">
@@ -285,6 +339,37 @@ export function DashboardSidebar({
           );
         })}
       </nav>
+
+      {config.length > 0 ? (
+        <>
+          <p className="mt-6 px-2.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+            Configuration
+          </p>
+          <nav className="mt-1 flex flex-col gap-0.5">
+            {config.map((item) => {
+              const active = pathname === item.href;
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs transition-colors",
+                    active
+                      ? cn("font-medium", workspace.active)
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon size={16} weight={active ? "fill" : "regular"} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </>
+      ) : null}
 
       {workspace.showPipeline ? (
         <>

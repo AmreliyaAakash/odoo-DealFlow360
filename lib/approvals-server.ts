@@ -226,3 +226,120 @@ export async function loadPendingApprovals(
     loadError: null,
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * The approvals board
+ * ------------------------------------------------------------------ */
+
+/**
+ * A deal that has left the queue. Thinner than `PendingApproval` on purpose:
+ * once a decision is recorded, the violating lines are history and re-deriving
+ * them for a row nobody can act on costs a join for no benefit.
+ */
+export type SettledApproval = {
+  id: string;
+  reference: string;
+  repName: string;
+  customer: string;
+  amount: number;
+  maxDiscountPct: number;
+  status: string;
+  decidedAt: string | null;
+};
+
+export type ApprovalBoard = {
+  pending: PendingApproval[];
+  /** Sent back to the rep — still theirs to fix, so it is not "done". */
+  returned: SettledApproval[];
+  approved: SettledApproval[];
+  loadError: string | null;
+};
+
+type SettledRow = {
+  id: string;
+  reference: string | null;
+  rep_id: string;
+  status: string | null;
+  net_total: number | null;
+  max_discount_pct: number | null;
+  updated_at: string | null;
+  customers: { name: string | null } | null;
+};
+
+/**
+ * Everything the approvals screen counts: what is waiting, what went back, and
+ * what cleared.
+ *
+ * Returned and approved are loaded alongside the queue rather than behind a
+ * second request, because the three counters are the first thing the screen
+ * says and a desk that sees "3 pending" appear before "12 approved" reads the
+ * gap as a loading bug. RLS still decides whose deals these are, so a rep sees
+ * their own history and an approver sees the desk's.
+ */
+export async function loadApprovalBoard(
+  role: Role | null,
+): Promise<ApprovalBoard> {
+  const supabase = createServerSupabaseClient();
+
+  const [quotations, rules, settled] = await Promise.all([
+    supabase
+      .from("quotations")
+      .select(PENDING_SELECT)
+      .eq("status", "pending_approval")
+      .order("submitted_at", { ascending: false, nullsFirst: false })
+      .returns<QuotationRow[]>(),
+    supabase
+      .from("discount_rules")
+      .select(DISCOUNT_RULE_SELECT)
+      .eq("active", true)
+      .returns<ApprovalDiscountRule[]>(),
+    // `won` counts as approved: a deal the customer accepted was approved
+    // first, and dropping it would make the approved counter fall as deals
+    // close, which is exactly backwards.
+    supabase
+      .from("quotations")
+      .select(
+        "id, reference, rep_id, status, net_total, max_discount_pct, updated_at, customers(name)",
+      )
+      .in("status", ["returned", "approved", "won"])
+      .order("updated_at", { ascending: false, nullsFirst: false })
+      .limit(100)
+      .returns<SettledRow[]>(),
+  ]);
+
+  const loadError =
+    quotations.error?.message ?? rules.error?.message ?? settled.error?.message ?? null;
+  if (loadError) {
+    return { pending: [], returned: [], approved: [], loadError };
+  }
+
+  const rows = quotations.data ?? [];
+  const settledRows = settled.data ?? [];
+
+  const repNames = await resolveUserNames([
+    ...rows.map((row) => row.rep_id),
+    ...settledRows.map((row) => row.rep_id),
+  ]);
+
+  const toSettled = (row: SettledRow): SettledApproval => ({
+    id: row.id,
+    reference: row.reference ?? shortId(row.id),
+    repName: nameFor(repNames, row.rep_id),
+    customer: row.customers?.name ?? "Unassigned",
+    amount: Number(row.net_total ?? 0),
+    maxDiscountPct: Number(row.max_discount_pct ?? 0),
+    status: row.status ?? "unknown",
+    decidedAt: row.updated_at,
+  });
+
+  return {
+    pending: buildPendingApprovals(rows, rules.data ?? [], repNames, role),
+    returned: settledRows
+      .filter((row) => row.status === "returned")
+      .map(toSettled),
+    approved: settledRows
+      .filter((row) => row.status !== "returned")
+      .map(toSettled),
+    loadError: null,
+  };
+}

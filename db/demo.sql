@@ -538,6 +538,110 @@ select i.id, i.order_id, round(i.total * 0.5, 2), 'cancellation',
  where i.reference = 'ORD-2026-0001-SUB1';
 
 
+
+-- ============================================================ catalog depth
+--
+-- Units, tax and prose for the product screens. Set per category rather than
+-- per SKU: the desk quotes hardware by the unit and services by the day, and a
+-- rule the seed can state in one line is a rule the admin can see is wrong.
+
+update products set unit = case
+  when category in ('Servers','Networking','Storage') then 'Each'
+  when category = 'Services' then 'Day'
+  else 'Month'
+end;
+
+update products set tax_pct = case
+  when category = 'Services' then 10
+  when category = 'Support'  then 0
+  else 15
+end;
+
+update products
+   set description = 'Catalogue item in ' || category ||
+                     ', quoted per ' || lower(unit) || '.'
+ where description is null;
+
+-- ============================================================ variants
+--
+-- Only on the hardware that genuinely ships in more than one shape.
+
+delete from product_variants;
+
+insert into product_variants (product_id, attribute, values, extra_price, position)
+select p.id, v.attribute, v.values, v.extra_price, v.position
+  from products p
+  join (values
+    ('SRV-R450', 'RAM',          array['64GB','128GB','256GB'], 45000.00, 0),
+    ('SRV-R450', 'Support Tier', array['Standard','Premium'],   18000.00, 1),
+    ('SRV-R650', 'RAM',          array['128GB','256GB','512GB'],90000.00, 0),
+    ('SRV-R650', 'Rails',        array['Static','Sliding'],      6000.00, 1),
+    ('NET-SW48', 'Optics',       array['SR','LR'],              22000.00, 0),
+    ('STO-N24',  'Capacity',     array['24TB','48TB'],         180000.00, 0)
+  ) as v(sku, attribute, values, extra_price, position) on v.sku = p.sku;
+
+-- ============================================================ price lists
+--
+-- Tier pricing as a rule, so a catalogue price rise reaches every tier at once.
+-- Catalogue-wide entries (null product) set the floor; the R650 gets its own
+-- keener Platinum rule, which is exactly the case the resolver has to get right.
+
+delete from price_lists;
+
+insert into price_lists (product_id, tier, currency, rule, amount) values
+  (null, 'standard', 'INR', 'none',        0),
+  (null, 'silver',   'INR', 'percent_off', 3),
+  (null, 'gold',     'INR', 'percent_off', 6),
+  (null, 'platinum', 'INR', 'percent_off', 9);
+
+insert into price_lists (product_id, tier, currency, rule, amount)
+select p.id, 'platinum', 'INR', 'percent_off', 12
+  from products p where p.sku = 'SRV-R650';
+
+-- ============================================================ subscriptions
+--
+-- One record per running plan, with a spread of states so the list screen has
+-- all three to render rather than a wall of "active".
+
+delete from subscriptions;
+
+insert into subscriptions (
+  order_id, quotation_id, customer_id, product_id, qty, unit_price,
+  cadence, status, started_at, next_bill_on, paused_at, cancelled_at
+)
+select o.id,
+       q.id,
+       q.customer_id,
+       p.id,
+       l.qty,
+       l.unit_price,
+       p.cadence,
+       v.status,
+       (coalesce(q.submitted_at, q.created_at))::date,
+       case when v.status = 'active'
+            then (coalesce(q.submitted_at, q.created_at)
+                  + case p.cadence
+                      when 'monthly'   then interval '1 month'
+                      when 'quarterly' then interval '3 months'
+                      else interval '12 months'
+                    end)::date
+       end,
+       case when v.status = 'paused'    then now() - interval '9 days' end,
+       case when v.status = 'cancelled' then now() - interval '4 days' end
+  from quotation_lines l
+  join quotations q on q.id = l.quotation_id
+  join products p on p.id = l.product_id
+  left join orders o on o.quotation_id = q.id
+  join (values
+    ('Q-2026-0001', 'active'),
+    ('Q-2026-0004', 'active'),
+    ('Q-2026-0005', 'paused'),
+    ('Q-2026-0011', 'active'),
+    ('Q-2026-0012', 'active'),
+    ('Q-2026-0023', 'cancelled')
+  ) as v(ref, status) on v.ref = q.reference
+ where p.cadence <> 'one_time';
+
 -- ============================================================================
 -- Verification — every line should report a non-zero count, and the per-role
 -- checks below should each return at least one row.
@@ -561,6 +665,9 @@ union all select 'invoices',              count(*) from invoices
 union all select 'invoice_lines',         count(*) from invoice_lines
 union all select 'payments',              count(*) from payments
 union all select 'credit_notes',          count(*) from credit_notes
+union all select 'product_variants',      count(*) from product_variants
+union all select 'price_lists',           count(*) from price_lists
+union all select 'subscriptions',         count(*) from subscriptions
 order by table_name;
 
 -- What each role will see.

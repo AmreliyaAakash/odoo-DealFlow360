@@ -599,6 +599,169 @@ function round2(value: number): number {
 }
 
 /* ------------------------------------------------------------------ *
+ * Price lists (A2)
+ * ------------------------------------------------------------------ */
+
+export const PRICE_RULES = ["none", "percent_off", "fixed"] as const;
+export type PriceRule = (typeof PRICE_RULES)[number];
+
+export const PRICE_RULE_LABELS: Record<PriceRule, string> = {
+  none: "Price, no adjustment",
+  percent_off: "Percent off base",
+  fixed: "Fixed price",
+};
+
+export type PriceListEntry = {
+  /** Null applies the rule to the whole catalogue for this tier. */
+  productId: string | null;
+  tier: CustomerTier;
+  currency: string;
+  rule: PriceRule;
+  amount: number;
+};
+
+/**
+ * What this customer actually pays before any negotiated discount.
+ *
+ * A product-specific entry beats a catalogue-wide one, because the desk writing
+ * a rule for one SKU means it for that SKU. Everything else falls through to
+ * list price, so a tier with no entry is quoted at list rather than free.
+ *
+ * This is the base the discount then comes off, not a discount itself — that
+ * separation is what keeps "Gold pays less" out of the approval routing, which
+ * should only ever be looking at what the rep chose to give away.
+ */
+export function priceForTier(
+  product: Pick<Product, "id" | "list_price">,
+  tier: CustomerTier,
+  entries: PriceListEntry[],
+): number {
+  const forTier = entries.filter((entry) => entry.tier === tier);
+  const match =
+    forTier.find((entry) => entry.productId === product.id) ??
+    forTier.find((entry) => entry.productId === null);
+
+  if (!match) return product.list_price;
+
+  switch (match.rule) {
+    case "percent_off": {
+      const off = Math.min(Math.max(match.amount, 0), 100);
+      return round2(product.list_price * (1 - off / 100));
+    }
+    case "fixed":
+      return Math.max(match.amount, 0);
+    default:
+      return product.list_price;
+  }
+}
+
+/** "Gold: 10% off base" — the helper text beside a price-list row. */
+export function priceRuleSummary(entry: PriceListEntry): string {
+  switch (entry.rule) {
+    case "percent_off":
+      return `${entry.amount}% off base`;
+    case "fixed":
+      return `Fixed ${entry.amount}`;
+    default:
+      return "Base price";
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Invoice lifecycle (B7)
+ * ------------------------------------------------------------------ */
+
+export const INVOICE_STAGES = [
+  "confirmed",
+  "shipped",
+  "invoiced",
+  "paid",
+] as const;
+export type InvoiceStage = (typeof INVOICE_STAGES)[number];
+
+export const INVOICE_STAGE_LABELS: Record<InvoiceStage, string> = {
+  confirmed: "Order Confirmed",
+  shipped: "Shipped",
+  invoiced: "Invoiced",
+  paid: "Paid",
+};
+
+/**
+ * How far one invoice has travelled, from facts rather than a status column.
+ *
+ * "Shipped" is read from the allocation: stock committed to the order is the
+ * only honest evidence anything left a warehouse, and a recurring line ships
+ * nothing at all — so a subscription invoice counts as shipped the moment it is
+ * raised rather than sitting forever at a step it can never pass.
+ *
+ * Keeping this derived is what makes partial invoicing reconcile with partial
+ * delivery: allocate half an order and its invoice stops at "shipped", which is
+ * exactly what the desk should see.
+ */
+export function invoiceStage(invoice: {
+  kind: "one_time" | "recurring";
+  amountPaid: number;
+  total: number;
+  /** Units of this order committed to a warehouse. */
+  allocatedUnits: number;
+  orderedUnits: number;
+}): InvoiceStage {
+  if (invoice.total > 0 && invoice.amountPaid >= invoice.total) return "paid";
+
+  const shipped =
+    invoice.kind === "recurring" ||
+    (invoice.orderedUnits > 0 && invoice.allocatedUnits >= invoice.orderedUnits);
+
+  return shipped ? "invoiced" : "confirmed";
+}
+
+/* ------------------------------------------------------------------ *
+ * Subscription lifecycle (B7)
+ * ------------------------------------------------------------------ */
+
+export const SUBSCRIPTION_STATUSES = ["active", "paused", "cancelled"] as const;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
+/**
+ * Which moves are legal. Cancellation is deliberately terminal: a customer who
+ * comes back gets a new subscription with its own start date, because reviving
+ * the old one would leave a gap in the billing history that nothing explains.
+ */
+export const SUBSCRIPTION_TRANSITIONS: Record<
+  SubscriptionStatus,
+  SubscriptionStatus[]
+> = {
+  active: ["paused", "cancelled"],
+  paused: ["active", "cancelled"],
+  cancelled: [],
+};
+
+export function canTransitionSubscription(
+  from: SubscriptionStatus,
+  to: SubscriptionStatus,
+): boolean {
+  return SUBSCRIPTION_TRANSITIONS[from].includes(to);
+}
+
+/** A paused or cancelled subscription contributes nothing to MRR. */
+export function subscriptionMrr(subscription: {
+  status: SubscriptionStatus;
+  cadence: BillingCadence;
+  qty: number;
+  unitPrice: number;
+}): number {
+  if (subscription.status !== "active") return 0;
+
+  return monthlyValue({
+    id: "",
+    name: "",
+    cadence: subscription.cadence,
+    qty: subscription.qty,
+    unitPrice: subscription.unitPrice,
+  });
+}
+
+/* ------------------------------------------------------------------ *
  * Upsell and cross-sell (A6 / B5)
  * ------------------------------------------------------------------ */
 
@@ -1011,4 +1174,75 @@ export function isQuoteClosedLost(status: string | null): boolean {
 /** A draft has not been sent, so it must never render as a customer's quote. */
 export function isQuoteVisibleToCustomer(status: string | null): boolean {
   return status !== null && status !== "draft";
+}
+
+/* ------------------------------------------------------------------ *
+ * Replenishment
+ * ------------------------------------------------------------------ */
+
+export const STOCK_HEALTH = ["healthy", "low", "critical", "out"] as const;
+export type StockHealth = (typeof STOCK_HEALTH)[number];
+
+export const STOCK_HEALTH_LABELS: Record<StockHealth, string> = {
+  healthy: "Healthy",
+  low: "At reorder point",
+  critical: "Below reorder point",
+  out: "Out of stock",
+};
+
+export type ReplenishmentRule = {
+  reorderPoint: number;
+  reorderQty: number;
+  leadTimeDays: number;
+};
+
+/**
+ * How worried to be about one warehouse's holding of one product.
+ *
+ * Four bands rather than a boolean because "needs reordering" and "cannot ship
+ * today" are different emergencies and get answered by different people. Out of
+ * stock is called out even where no rule exists: a warehouse holding zero is a
+ * fact worth showing whether or not anybody has written a reorder point for it.
+ */
+export function stockHealth(
+  available: number,
+  rule: ReplenishmentRule | null,
+): StockHealth {
+  if (available <= 0) return "out";
+  if (!rule) return "healthy";
+  if (available < rule.reorderPoint) return "critical";
+  if (available === rule.reorderPoint) return "low";
+  return "healthy";
+}
+
+/**
+ * How much to bring in, in whole multiples of the reorder quantity.
+ *
+ * Ordering the exact shortfall would put the line back at its reorder point,
+ * where the next unit shipped trips the rule again. Rounding up to a multiple
+ * of the reorder quantity is also how suppliers actually sell — in cases and
+ * pallets, not in ones.
+ */
+export function suggestedOrderQty(
+  available: number,
+  rule: ReplenishmentRule,
+): number {
+  const target = rule.reorderPoint + rule.reorderQty;
+  const shortfall = target - available;
+  if (shortfall <= 0) return 0;
+
+  return Math.ceil(shortfall / rule.reorderQty) * rule.reorderQty;
+}
+
+/**
+ * The date an order placed today would land.
+ *
+ * Calendar days, not business days: a lead time quoted by a supplier is a
+ * calendar promise, unlike the desk's own SLAs which are measured in working
+ * days because a desk does not work weekends.
+ */
+export function expectedArrival(rule: ReplenishmentRule, from: Date = new Date()): Date {
+  const arrival = new Date(from);
+  arrival.setDate(arrival.getDate() + rule.leadTimeDays);
+  return arrival;
 }

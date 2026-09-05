@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCapability } from "@/lib/auth";
 import {
   BACKEND_ENTITIES,
+  checkEntityRules,
   entityConfig,
   isBackendEntity,
   parseRow,
@@ -133,6 +134,15 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
   if (!before) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Cross-field rules judge the row as it will be, not the handful of fields
+  // this request happened to carry. Clearing an upsell rule's only trigger is
+  // invisible to the parser — it never saw the trigger that is already stored.
+  const merged = { ...before, ...parsed.values };
+  const violation = checkEntityRules(entity, merged);
+  if (violation) {
+    return NextResponse.json({ error: violation }, { status: 400 });
   }
 
   const { data, error } = await supabase

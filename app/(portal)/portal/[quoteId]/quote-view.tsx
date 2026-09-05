@@ -2,7 +2,8 @@
 
 import { useRef } from "react";
 import { LineItems } from "./line-items";
-import { NegotiationThread, type NegotiationHandle } from "./negotiation-thread";
+import { type NegotiationHandle } from "./negotiation-thread";
+import { SidePanel } from "./side-panel";
 import { proposalToMessage, type Proposal } from "./propose-change-dialog";
 import type { PortalQuote } from "./types";
 
@@ -52,10 +53,11 @@ export function QuoteView({ quote }: { quote: PortalQuote }) {
         ) : null}
       </section>
 
-      <NegotiationThread
-        ref={thread}
+      <SidePanel
         quoteId={quote.id}
         readOnly={locked}
+        profile={quote.profile}
+        threadRef={thread}
       />
     </div>
   );

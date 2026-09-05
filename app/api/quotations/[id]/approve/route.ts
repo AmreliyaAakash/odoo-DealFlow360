@@ -28,6 +28,8 @@ type QuotationRow = {
   id: string;
   status: string | null;
   required_approvals: string[] | null;
+  /** Start of the current approval round. */
+  submitted_at: string | null;
 };
 
 /**
@@ -87,7 +89,7 @@ export async function POST(
 
   const { data: quotation, error: loadError } = await supabase
     .from("quotations")
-    .select("id, status, required_approvals")
+    .select("id, status, required_approvals, submitted_at")
     .eq("id", id)
     .maybeSingle<QuotationRow>();
 
@@ -127,7 +129,13 @@ export async function POST(
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  const status = await nextStatus(supabase, id, action, required);
+  const status = await nextStatus(
+    supabase,
+    id,
+    action,
+    required,
+    quotation.submitted_at,
+  );
 
   const { error: updateError } = await supabase
     .from("quotations")
@@ -140,7 +148,7 @@ export async function POST(
 
   const outstanding =
     status === "pending_approval"
-      ? await outstandingLevels(supabase, id, required)
+      ? await outstandingLevels(supabase, id, required, quotation.submitted_at)
       : [];
 
   return NextResponse.json({
@@ -212,26 +220,45 @@ async function nextStatus(
   quotationId: string,
   action: Action,
   required: string[],
+  roundStartedAt: string | null,
 ): Promise<string> {
   if (action !== "approve") {
     return STATUS_BY_ACTION[action];
   }
 
-  const outstanding = await outstandingLevels(supabase, quotationId, required);
+  const outstanding = await outstandingLevels(
+    supabase,
+    quotationId,
+    required,
+    roundStartedAt,
+  );
   return outstanding.length === 0 ? "approved" : "pending_approval";
 }
 
+/**
+ * Levels this deal still needs, counting only decisions from the current round.
+ *
+ * The round matters because a rep may edit a quotation while it is in approval,
+ * and doing so moves `submitted_at`. An approval given before that was given on
+ * different numbers, so counting it here would let a single sign-off on the new
+ * terms clear a deal that two levels had actually been asked about — the exact
+ * hole that makes an editable pending quote dangerous rather than convenient.
+ */
 async function outstandingLevels(
   supabase: ReturnType<typeof createServerSupabaseClient>,
   quotationId: string,
   required: string[],
+  roundStartedAt: string | null,
 ): Promise<string[]> {
-  const { data } = await supabase
+  let query = supabase
     .from("approvals")
     .select("level")
     .eq("quotation_id", quotationId)
-    .eq("action", "approve")
-    .returns<{ level: string }[]>();
+    .eq("action", "approve");
+
+  if (roundStartedAt) query = query.gte("decided_at", roundStartedAt);
+
+  const { data } = await query.returns<{ level: string }[]>();
 
   const approved = new Set((data ?? []).map((row) => row.level));
   return required.filter((level) => !approved.has(level));

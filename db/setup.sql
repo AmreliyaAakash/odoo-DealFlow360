@@ -111,6 +111,32 @@ create table if not exists warehouse_stock (
   primary key (warehouse_id, product_id)
 );
 
+-- When to bring more stock in, per warehouse and product.
+--
+-- Separate from warehouse_stock because they answer different questions and
+-- change on different clocks: stock is a fact that moves every time something
+-- ships, a reorder point is a decision somebody made once. Keeping the decision
+-- in the stock row would mean every shipment rewrites it.
+--
+-- reorder_qty is constrained above reorder_point so a delivery always clears
+-- the trigger — otherwise stock lands, is still below the point, and the rule
+-- fires again on the next check, forever.
+create table if not exists replenishment_rules (
+  id             uuid primary key default gen_random_uuid(),
+  warehouse_id   uuid not null references warehouses(id) on delete cascade,
+  product_id     uuid not null references products(id) on delete cascade,
+  reorder_point  int not null default 0 check (reorder_point >= 0),
+  reorder_qty    int not null check (reorder_qty > 0),
+  lead_time_days int not null default 7 check (lead_time_days >= 0),
+  active         boolean not null default true,
+  created_at     timestamptz not null default now(),
+  check (reorder_qty > reorder_point),
+  unique (warehouse_id, product_id)
+);
+
+create index if not exists replenishment_rules_warehouse_idx
+  on replenishment_rules (warehouse_id);
+
 create table if not exists subscription_plans (
   id              uuid primary key default gen_random_uuid(),
   name            text not null,
@@ -140,6 +166,11 @@ do $$ begin
   alter table customers add constraint customers_tier_check
     check (tier in ('standard','silver','gold','platinum'));
 exception when duplicate_object then null; end $$;
+
+-- Contact details the portal shows back to the customer. Kept nullable: an
+-- account created from a quotation has a name long before anyone fills these in.
+alter table customers add column if not exists phone   text;
+alter table customers add column if not exists address text;
 
 create index if not exists customers_portal_user_id_idx
   on customers (portal_user_id);
@@ -172,6 +203,11 @@ create table if not exists quotations (
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
+
+-- What the customer asked for at confirmation. A request, not a promise: the
+-- promise is the allocation's ship date, and conflating the two would let a
+-- date the customer typed silently become an SLA the desk never agreed to.
+alter table quotations add column if not exists requested_delivery_date date;
 
 create index if not exists quotations_rep_id_idx on quotations (rep_id);
 create index if not exists quotations_status_idx on quotations (status);
@@ -244,6 +280,93 @@ create table if not exists quotation_allocations (
 
 create index if not exists quotation_allocations_quotation_id_idx
   on quotation_allocations (quotation_id);
+
+-- ============================================================ catalog depth (A2)
+--
+-- The product screens need more than a price: a unit to quote in, a tax rate to
+-- invoice at, and prose the rep can read on the detail page.
+
+alter table products add column if not exists unit text not null default 'Each';
+alter table products add column if not exists tax_pct numeric(5,2) not null default 0
+  check (tax_pct between 0 and 100);
+alter table products add column if not exists description text;
+
+-- One product, several sellable shapes. Kept as attribute/value rather than a
+-- generated SKU matrix: the desk thinks in "Size: S, M, L (+$10)", and exploding
+-- that into rows the moment it is typed makes editing an attribute a migration.
+create table if not exists product_variants (
+  id          uuid primary key default gen_random_uuid(),
+  product_id  uuid not null references products(id) on delete cascade,
+  -- "Color", "RAM", "Manufacturer".
+  attribute   text not null,
+  -- The choices, in the order the desk wants them shown.
+  values      text[] not null default '{}',
+  -- Added to the product's list price when this variant is chosen. One figure
+  -- for the attribute, because a per-value price belongs in a price list.
+  extra_price numeric(12,2) not null default 0,
+  position    int not null default 0,
+  created_at  timestamptz not null default now(),
+  unique (product_id, attribute)
+);
+
+create index if not exists product_variants_product_id_idx
+  on product_variants (product_id, position);
+
+-- Tier and currency pricing. A rule rather than a fixed price, so a catalogue
+-- price rise reaches every tier at once instead of silently leaving Gold behind.
+create table if not exists price_lists (
+  id          uuid primary key default gen_random_uuid(),
+  product_id  uuid references products(id) on delete cascade,
+  -- Null product means the rule applies to the whole catalogue for that tier.
+  tier        text not null
+                check (tier in ('standard','silver','gold','platinum')),
+  currency    text not null default 'INR',
+  -- How the list price is adjusted: a percentage off, or an outright override.
+  rule        text not null default 'none'
+                check (rule in ('none','percent_off','fixed')),
+  -- Percent for `percent_off`, absolute price for `fixed`, ignored for `none`.
+  amount      numeric(12,2) not null default 0 check (amount >= 0),
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists price_lists_product_id_idx on price_lists (product_id);
+create index if not exists price_lists_tier_idx on price_lists (tier);
+
+-- ============================================================ subscriptions (B7)
+--
+-- A running subscription, as its own record.
+--
+-- Derived from quotation lines it could only ever be "active": pausing or
+-- cancelling one is a fact about the subscription, not about the quote that
+-- created it, and a quote cannot be edited to say so after it is won.
+
+create table if not exists subscriptions (
+  id           uuid primary key default gen_random_uuid(),
+  order_id     uuid references orders(id) on delete cascade,
+  quotation_id uuid references quotations(id) on delete set null,
+  customer_id  uuid references customers(id) on delete set null,
+  product_id   uuid references products(id) on delete set null,
+  plan_id      uuid references subscription_plans(id) on delete set null,
+  qty          numeric(12,2) not null default 1 check (qty >= 0),
+  unit_price   numeric(12,2) not null default 0 check (unit_price >= 0),
+  cadence      text not null default 'monthly'
+                 check (cadence in ('monthly','quarterly','annual')),
+  status       text not null default 'active'
+                 check (status in ('active','paused','cancelled')),
+  -- Where the billing dates step from, and when it next bills.
+  started_at   date not null default current_date,
+  next_bill_on date,
+  -- Set when the status last moved away from active, for the audit trail.
+  paused_at    timestamptz,
+  cancelled_at timestamptz,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists subscriptions_customer_id_idx on subscriptions (customer_id);
+create index if not exists subscriptions_status_idx on subscriptions (status);
+create index if not exists subscriptions_order_id_idx on subscriptions (order_id);
 
 -- ============================================================ orders & billing (B7)
 --
@@ -602,6 +725,7 @@ alter table products                enable row level security;
 alter table discount_rules          enable row level security;
 alter table warehouses              enable row level security;
 alter table warehouse_stock         enable row level security;
+alter table replenishment_rules     enable row level security;
 alter table subscription_plans      enable row level security;
 alter table upsell_rules            enable row level security;
 alter table customers               enable row level security;
@@ -611,6 +735,9 @@ alter table approvals               enable row level security;
 alter table negotiation_messages    enable row level security;
 alter table quotation_allocations   enable row level security;
 alter table config_audit_log        enable row level security;
+alter table product_variants        enable row level security;
+alter table price_lists             enable row level security;
+alter table subscriptions           enable row level security;
 alter table orders                  enable row level security;
 alter table invoices                enable row level security;
 alter table invoice_lines           enable row level security;
@@ -636,6 +763,7 @@ declare
     ['discount_rules','discountRules'],
     ['warehouses','warehouses'],
     ['warehouse_stock','warehouses'],
+    ['replenishment_rules','warehouses'],
     ['subscription_plans','subscriptionPlans'],
     ['upsell_rules','upsellRules']
   ];
@@ -866,6 +994,49 @@ create policy credit_notes_read on credit_notes
 
 drop policy if exists credit_notes_write on credit_notes;
 create policy credit_notes_write on credit_notes
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+-- ------------------------------------------------------------ catalog depth
+
+-- Variants and price lists are part of the product record, so they follow the
+-- products module rather than carrying a permission of their own.
+drop policy if exists product_variants_read on product_variants;
+create policy product_variants_read on product_variants
+  for select using (has_capability('products', 'view'));
+
+drop policy if exists product_variants_write on product_variants;
+create policy product_variants_write on product_variants
+  for all
+  using (has_capability('products', 'write'))
+  with check (has_capability('products', 'write'));
+
+drop policy if exists price_lists_read on price_lists;
+create policy price_lists_read on price_lists
+  for select using (has_capability('products', 'view'));
+
+drop policy if exists price_lists_write on price_lists;
+create policy price_lists_write on price_lists
+  for all
+  using (has_capability('products', 'write'))
+  with check (has_capability('products', 'write'));
+
+-- ------------------------------------------------------------ subscriptions
+
+-- A customer may read their own running subscriptions through the portal; only
+-- billing may pause, cancel or create one.
+drop policy if exists subscriptions_read on subscriptions;
+create policy subscriptions_read on subscriptions
+  for select using (
+    has_capability('billing', 'view')
+    or customer_id in (
+      select id from customers where portal_user_id = clerk_user_id()
+    )
+  );
+
+drop policy if exists subscriptions_write on subscriptions;
+create policy subscriptions_write on subscriptions
   for all
   using (has_capability('billing', 'write'))
   with check (has_capability('billing', 'write'));
@@ -1140,12 +1311,28 @@ on conflict do nothing;
 -- ============================================================ demo customer
 -- Set `portal_user_id` to a real Clerk user ID to exercise the portal (B8).
 
-insert into customers (name, email, tier, portal_user_id) values
-  ('Northwind Logistics',  'ops@northwind.example',  'gold',     null),
-  ('Helios Manufacturing', 'it@helios.example',      'silver',   null),
-  ('Vertex Retail Group',  'procure@vertex.example', 'platinum', null),
-  ('Bluepeak Systems',     'admin@bluepeak.example', 'standard', null)
+insert into customers (name, email, phone, address, tier, portal_user_id) values
+  ('Northwind Logistics',  'ops@northwind.example',  '+91 22 4000 1180',
+   E'Unit 7, Sahar Cargo Complex
+Andheri East, Mumbai 400099',    'gold',     null),
+  ('Helios Manufacturing', 'it@helios.example',      '+91 20 6725 3311',
+   E'Plot 14, Chakan MIDC Phase II
+Pune 410501',                  'silver',   null),
+  ('Vertex Retail Group',  'procure@vertex.example', '+91 80 4155 9020',
+   E'Prestige Tech Park, Tower C
+Marathahalli, Bengaluru 560103', 'platinum', null),
+  ('Bluepeak Systems',     'admin@bluepeak.example', '+91 44 2815 7744',
+   E'3rd Floor, Tidel Park
+Taramani, Chennai 600113',             'standard', null)
 on conflict do nothing;
+
+-- Backfill for a database seeded before contact details existed: the portal's
+-- Profile tab is only worth opening if there is something in it.
+update customers
+   set phone   = coalesce(phone, '+91 22 4000 1180'),
+       address = coalesce(address, E'Unit 7, Sahar Cargo Complex
+Andheri East, Mumbai 400099')
+ where name = 'Northwind Logistics';
 
 -- ============================================================ upsell rules
 
@@ -1214,6 +1401,45 @@ update warehouse_stock ws
  where ws.warehouse_id = w.id
    and ws.product_id = p.id
    and p.sku = 'SUB-PRM';
+
+-- ============================================================ reorder rules
+--
+-- When to bring more stock in. Written against the stock levels set above so
+-- the reorder panel opens with every health band showing rather than an empty
+-- table: the R650 is below its point at all four sites, premium support is out
+-- at three and healthy at the fourth, the installation service sits above its
+-- point except at the smallest warehouse, and standard support lands exactly
+-- on its point in Dallas — the one band the others never produce.
+--
+-- reorder_qty is above reorder_point in every rule, which the table also
+-- enforces: a delivery that lands and leaves stock still below the point would
+-- trip the rule again on the next check, forever.
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 10, 25, 14
+from warehouses w cross join products p
+where p.sku = 'SRV-R650'
+on conflict (warehouse_id, product_id) do nothing;
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 5, 20, 3
+from warehouses w cross join products p
+where p.sku = 'SUB-PRM'
+on conflict (warehouse_id, product_id) do nothing;
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 10, 40, 7
+from warehouses w cross join products p
+where p.sku = 'SVC-INST'
+on conflict (warehouse_id, product_id) do nothing;
+
+-- Dallas holds exactly 15 of these, which is the reorder point: the "at reorder
+-- point" band, which no other seeded line produces.
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 15, 40, 5
+from warehouses w cross join products p
+where p.sku = 'SUB-STD'
+on conflict (warehouse_id, product_id) do nothing;
 
 -- ============================================================ promotions
 --
@@ -1767,6 +1993,110 @@ select i.id, i.order_id, round(i.total * 0.5, 2), 'cancellation',
  where i.reference = 'ORD-2026-0001-SUB1';
 
 
+
+-- ============================================================ catalog depth
+--
+-- Units, tax and prose for the product screens. Set per category rather than
+-- per SKU: the desk quotes hardware by the unit and services by the day, and a
+-- rule the seed can state in one line is a rule the admin can see is wrong.
+
+update products set unit = case
+  when category in ('Servers','Networking','Storage') then 'Each'
+  when category = 'Services' then 'Day'
+  else 'Month'
+end;
+
+update products set tax_pct = case
+  when category = 'Services' then 10
+  when category = 'Support'  then 0
+  else 15
+end;
+
+update products
+   set description = 'Catalogue item in ' || category ||
+                     ', quoted per ' || lower(unit) || '.'
+ where description is null;
+
+-- ============================================================ variants
+--
+-- Only on the hardware that genuinely ships in more than one shape.
+
+delete from product_variants;
+
+insert into product_variants (product_id, attribute, values, extra_price, position)
+select p.id, v.attribute, v.values, v.extra_price, v.position
+  from products p
+  join (values
+    ('SRV-R450', 'RAM',          array['64GB','128GB','256GB'], 45000.00, 0),
+    ('SRV-R450', 'Support Tier', array['Standard','Premium'],   18000.00, 1),
+    ('SRV-R650', 'RAM',          array['128GB','256GB','512GB'],90000.00, 0),
+    ('SRV-R650', 'Rails',        array['Static','Sliding'],      6000.00, 1),
+    ('NET-SW48', 'Optics',       array['SR','LR'],              22000.00, 0),
+    ('STO-N24',  'Capacity',     array['24TB','48TB'],         180000.00, 0)
+  ) as v(sku, attribute, values, extra_price, position) on v.sku = p.sku;
+
+-- ============================================================ price lists
+--
+-- Tier pricing as a rule, so a catalogue price rise reaches every tier at once.
+-- Catalogue-wide entries (null product) set the floor; the R650 gets its own
+-- keener Platinum rule, which is exactly the case the resolver has to get right.
+
+delete from price_lists;
+
+insert into price_lists (product_id, tier, currency, rule, amount) values
+  (null, 'standard', 'INR', 'none',        0),
+  (null, 'silver',   'INR', 'percent_off', 3),
+  (null, 'gold',     'INR', 'percent_off', 6),
+  (null, 'platinum', 'INR', 'percent_off', 9);
+
+insert into price_lists (product_id, tier, currency, rule, amount)
+select p.id, 'platinum', 'INR', 'percent_off', 12
+  from products p where p.sku = 'SRV-R650';
+
+-- ============================================================ subscriptions
+--
+-- One record per running plan, with a spread of states so the list screen has
+-- all three to render rather than a wall of "active".
+
+delete from subscriptions;
+
+insert into subscriptions (
+  order_id, quotation_id, customer_id, product_id, qty, unit_price,
+  cadence, status, started_at, next_bill_on, paused_at, cancelled_at
+)
+select o.id,
+       q.id,
+       q.customer_id,
+       p.id,
+       l.qty,
+       l.unit_price,
+       p.cadence,
+       v.status,
+       (coalesce(q.submitted_at, q.created_at))::date,
+       case when v.status = 'active'
+            then (coalesce(q.submitted_at, q.created_at)
+                  + case p.cadence
+                      when 'monthly'   then interval '1 month'
+                      when 'quarterly' then interval '3 months'
+                      else interval '12 months'
+                    end)::date
+       end,
+       case when v.status = 'paused'    then now() - interval '9 days' end,
+       case when v.status = 'cancelled' then now() - interval '4 days' end
+  from quotation_lines l
+  join quotations q on q.id = l.quotation_id
+  join products p on p.id = l.product_id
+  left join orders o on o.quotation_id = q.id
+  join (values
+    ('Q-2026-0001', 'active'),
+    ('Q-2026-0004', 'active'),
+    ('Q-2026-0005', 'paused'),
+    ('Q-2026-0011', 'active'),
+    ('Q-2026-0012', 'active'),
+    ('Q-2026-0023', 'cancelled')
+  ) as v(ref, status) on v.ref = q.reference
+ where p.cadence <> 'one_time';
+
 -- ============================================================================
 -- Verification — every line should report a non-zero count, and the per-role
 -- checks below should each return at least one row.
@@ -1790,6 +2120,9 @@ union all select 'invoices',              count(*) from invoices
 union all select 'invoice_lines',         count(*) from invoice_lines
 union all select 'payments',              count(*) from payments
 union all select 'credit_notes',          count(*) from credit_notes
+union all select 'product_variants',      count(*) from product_variants
+union all select 'price_lists',           count(*) from price_lists
+union all select 'subscriptions',         count(*) from subscriptions
 order by table_name;
 
 -- What each role will see.

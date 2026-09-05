@@ -1,13 +1,14 @@
 import { requireCapability } from "@/lib/auth";
 import { entityConfig, type BackendEntity } from "@/lib/backend-entities";
+import { loadReferenceOptions } from "@/lib/reference-options";
 import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { Notice, PageHeader } from "@/components/dashboard/panel";
 import { ResourceTable, type ResourceRow } from "@/components/backend/resource-table";
 
 /**
- * Shared body for the four config screens (A2–A5). They differ only by entity,
- * so the page files are thin wrappers around this.
+ * Shared body for the config screens (A2–A5). They differ only by entity, so
+ * the page files are thin wrappers around this.
  */
 export async function EntityPage({ entity }: { entity: BackendEntity }) {
   const config = entityConfig(entity);
@@ -28,11 +29,16 @@ export async function EntityPage({ entity }: { entity: BackendEntity }) {
 
   const supabase = createServerSupabaseClient();
 
-  const { data, error } = await supabase
-    .from(config.table)
-    .select(config.columns.join(", "))
-    .order(config.orderBy, { ascending: true })
-    .returns<ResourceRow[]>();
+  // Rows and the lookups its reference fields need, together: a table showing
+  // raw uuids while the names load would be unreadable, and both are cheap.
+  const [{ data, error }, references] = await Promise.all([
+    supabase
+      .from(config.table)
+      .select(config.columns.join(", "))
+      .order(config.orderBy, { ascending: true })
+      .returns<ResourceRow[]>(),
+    loadReferenceOptions(config.fields),
+  ]);
 
   const rows = data ?? [];
 
@@ -56,6 +62,7 @@ export async function EntityPage({ entity }: { entity: BackendEntity }) {
         fields={config.fields}
         rows={rows}
         canWrite={canWrite}
+        references={references}
       />
     </main>
   );

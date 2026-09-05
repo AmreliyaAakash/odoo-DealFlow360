@@ -22,8 +22,20 @@ const QUOTATION_SELECT = `
   )
 `;
 
-/** Statuses a rep is allowed to edit. Anything further along is locked. */
-const EDITABLE_STATUSES = new Set(["draft", "returned", null]);
+/**
+ * Statuses a rep is allowed to edit: everything up to the point the desk has
+ * actually said yes.
+ *
+ * `pending_approval` is included deliberately. A quote waiting on an approver is
+ * still the rep's to fix — a wrong quantity spotted while it sits in the queue
+ * should be corrected, not rejected and re-raised. What that costs is handled
+ * below: editing a quote mid-round re-opens the round, so nobody's earlier
+ * sign-off can carry over onto terms they never saw.
+ */
+const EDITABLE_STATUSES = new Set(["draft", "returned", "pending_approval", null]);
+
+/** Editing one of these re-opens the approval round rather than leaving it. */
+const IN_APPROVAL_STATUSES = new Set(["pending_approval"]);
 
 /** Scalar fields a PATCH may set, alongside `lines`. */
 const EDITABLE_FIELDS = ["reference", "notes", "valid_until"] as const;
@@ -163,6 +175,19 @@ export async function PATCH(
 
     update.status = requiredApprovals.length > 0 ? "pending_approval" : "approved";
     update.submitted_by = actor.userId;
+    update.submitted_at = new Date().toISOString();
+  } else if (lines && IN_APPROVAL_STATUSES.has(existing.status ?? "")) {
+    // Edited while sitting with an approver. The routing is re-derived from the
+    // new lines — a rep who cuts the discount can take the deal out of approval
+    // entirely, and one who deepens it can pull in a level that was not needed
+    // before — and the round restarts.
+    //
+    // Restarting matters more than it looks: decisions already recorded were
+    // made about different numbers. The rows stay, because the audit trail is
+    // the point, but `submitted_at` moves, and the queue reads the current round
+    // off that. Without this a manager's approval of a 12% quote would silently
+    // stand after the rep edited it to 30%.
+    update.status = requiredApprovals.length > 0 ? "pending_approval" : "approved";
     update.submitted_at = new Date().toISOString();
   }
 

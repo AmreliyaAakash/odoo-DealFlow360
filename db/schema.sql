@@ -102,6 +102,32 @@ create table if not exists warehouse_stock (
   primary key (warehouse_id, product_id)
 );
 
+-- When to bring more stock in, per warehouse and product.
+--
+-- Separate from warehouse_stock because they answer different questions and
+-- change on different clocks: stock is a fact that moves every time something
+-- ships, a reorder point is a decision somebody made once. Keeping the decision
+-- in the stock row would mean every shipment rewrites it.
+--
+-- reorder_qty is constrained above reorder_point so a delivery always clears
+-- the trigger — otherwise stock lands, is still below the point, and the rule
+-- fires again on the next check, forever.
+create table if not exists replenishment_rules (
+  id             uuid primary key default gen_random_uuid(),
+  warehouse_id   uuid not null references warehouses(id) on delete cascade,
+  product_id     uuid not null references products(id) on delete cascade,
+  reorder_point  int not null default 0 check (reorder_point >= 0),
+  reorder_qty    int not null check (reorder_qty > 0),
+  lead_time_days int not null default 7 check (lead_time_days >= 0),
+  active         boolean not null default true,
+  created_at     timestamptz not null default now(),
+  check (reorder_qty > reorder_point),
+  unique (warehouse_id, product_id)
+);
+
+create index if not exists replenishment_rules_warehouse_idx
+  on replenishment_rules (warehouse_id);
+
 create table if not exists subscription_plans (
   id              uuid primary key default gen_random_uuid(),
   name            text not null,
@@ -131,6 +157,11 @@ do $$ begin
   alter table customers add constraint customers_tier_check
     check (tier in ('standard','silver','gold','platinum'));
 exception when duplicate_object then null; end $$;
+
+-- Contact details the portal shows back to the customer. Kept nullable: an
+-- account created from a quotation has a name long before anyone fills these in.
+alter table customers add column if not exists phone   text;
+alter table customers add column if not exists address text;
 
 create index if not exists customers_portal_user_id_idx
   on customers (portal_user_id);
@@ -163,6 +194,11 @@ create table if not exists quotations (
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
+
+-- What the customer asked for at confirmation. A request, not a promise: the
+-- promise is the allocation's ship date, and conflating the two would let a
+-- date the customer typed silently become an SLA the desk never agreed to.
+alter table quotations add column if not exists requested_delivery_date date;
 
 create index if not exists quotations_rep_id_idx on quotations (rep_id);
 create index if not exists quotations_status_idx on quotations (status);
@@ -235,6 +271,93 @@ create table if not exists quotation_allocations (
 
 create index if not exists quotation_allocations_quotation_id_idx
   on quotation_allocations (quotation_id);
+
+-- ============================================================ catalog depth (A2)
+--
+-- The product screens need more than a price: a unit to quote in, a tax rate to
+-- invoice at, and prose the rep can read on the detail page.
+
+alter table products add column if not exists unit text not null default 'Each';
+alter table products add column if not exists tax_pct numeric(5,2) not null default 0
+  check (tax_pct between 0 and 100);
+alter table products add column if not exists description text;
+
+-- One product, several sellable shapes. Kept as attribute/value rather than a
+-- generated SKU matrix: the desk thinks in "Size: S, M, L (+$10)", and exploding
+-- that into rows the moment it is typed makes editing an attribute a migration.
+create table if not exists product_variants (
+  id          uuid primary key default gen_random_uuid(),
+  product_id  uuid not null references products(id) on delete cascade,
+  -- "Color", "RAM", "Manufacturer".
+  attribute   text not null,
+  -- The choices, in the order the desk wants them shown.
+  values      text[] not null default '{}',
+  -- Added to the product's list price when this variant is chosen. One figure
+  -- for the attribute, because a per-value price belongs in a price list.
+  extra_price numeric(12,2) not null default 0,
+  position    int not null default 0,
+  created_at  timestamptz not null default now(),
+  unique (product_id, attribute)
+);
+
+create index if not exists product_variants_product_id_idx
+  on product_variants (product_id, position);
+
+-- Tier and currency pricing. A rule rather than a fixed price, so a catalogue
+-- price rise reaches every tier at once instead of silently leaving Gold behind.
+create table if not exists price_lists (
+  id          uuid primary key default gen_random_uuid(),
+  product_id  uuid references products(id) on delete cascade,
+  -- Null product means the rule applies to the whole catalogue for that tier.
+  tier        text not null
+                check (tier in ('standard','silver','gold','platinum')),
+  currency    text not null default 'INR',
+  -- How the list price is adjusted: a percentage off, or an outright override.
+  rule        text not null default 'none'
+                check (rule in ('none','percent_off','fixed')),
+  -- Percent for `percent_off`, absolute price for `fixed`, ignored for `none`.
+  amount      numeric(12,2) not null default 0 check (amount >= 0),
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists price_lists_product_id_idx on price_lists (product_id);
+create index if not exists price_lists_tier_idx on price_lists (tier);
+
+-- ============================================================ subscriptions (B7)
+--
+-- A running subscription, as its own record.
+--
+-- Derived from quotation lines it could only ever be "active": pausing or
+-- cancelling one is a fact about the subscription, not about the quote that
+-- created it, and a quote cannot be edited to say so after it is won.
+
+create table if not exists subscriptions (
+  id           uuid primary key default gen_random_uuid(),
+  order_id     uuid references orders(id) on delete cascade,
+  quotation_id uuid references quotations(id) on delete set null,
+  customer_id  uuid references customers(id) on delete set null,
+  product_id   uuid references products(id) on delete set null,
+  plan_id      uuid references subscription_plans(id) on delete set null,
+  qty          numeric(12,2) not null default 1 check (qty >= 0),
+  unit_price   numeric(12,2) not null default 0 check (unit_price >= 0),
+  cadence      text not null default 'monthly'
+                 check (cadence in ('monthly','quarterly','annual')),
+  status       text not null default 'active'
+                 check (status in ('active','paused','cancelled')),
+  -- Where the billing dates step from, and when it next bills.
+  started_at   date not null default current_date,
+  next_bill_on date,
+  -- Set when the status last moved away from active, for the audit trail.
+  paused_at    timestamptz,
+  cancelled_at timestamptz,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists subscriptions_customer_id_idx on subscriptions (customer_id);
+create index if not exists subscriptions_status_idx on subscriptions (status);
+create index if not exists subscriptions_order_id_idx on subscriptions (order_id);
 
 -- ============================================================ orders & billing (B7)
 --
@@ -593,6 +716,7 @@ alter table products                enable row level security;
 alter table discount_rules          enable row level security;
 alter table warehouses              enable row level security;
 alter table warehouse_stock         enable row level security;
+alter table replenishment_rules     enable row level security;
 alter table subscription_plans      enable row level security;
 alter table upsell_rules            enable row level security;
 alter table customers               enable row level security;
@@ -602,6 +726,9 @@ alter table approvals               enable row level security;
 alter table negotiation_messages    enable row level security;
 alter table quotation_allocations   enable row level security;
 alter table config_audit_log        enable row level security;
+alter table product_variants        enable row level security;
+alter table price_lists             enable row level security;
+alter table subscriptions           enable row level security;
 alter table orders                  enable row level security;
 alter table invoices                enable row level security;
 alter table invoice_lines           enable row level security;
@@ -627,6 +754,7 @@ declare
     ['discount_rules','discountRules'],
     ['warehouses','warehouses'],
     ['warehouse_stock','warehouses'],
+    ['replenishment_rules','warehouses'],
     ['subscription_plans','subscriptionPlans'],
     ['upsell_rules','upsellRules']
   ];
@@ -857,6 +985,49 @@ create policy credit_notes_read on credit_notes
 
 drop policy if exists credit_notes_write on credit_notes;
 create policy credit_notes_write on credit_notes
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+-- ------------------------------------------------------------ catalog depth
+
+-- Variants and price lists are part of the product record, so they follow the
+-- products module rather than carrying a permission of their own.
+drop policy if exists product_variants_read on product_variants;
+create policy product_variants_read on product_variants
+  for select using (has_capability('products', 'view'));
+
+drop policy if exists product_variants_write on product_variants;
+create policy product_variants_write on product_variants
+  for all
+  using (has_capability('products', 'write'))
+  with check (has_capability('products', 'write'));
+
+drop policy if exists price_lists_read on price_lists;
+create policy price_lists_read on price_lists
+  for select using (has_capability('products', 'view'));
+
+drop policy if exists price_lists_write on price_lists;
+create policy price_lists_write on price_lists
+  for all
+  using (has_capability('products', 'write'))
+  with check (has_capability('products', 'write'));
+
+-- ------------------------------------------------------------ subscriptions
+
+-- A customer may read their own running subscriptions through the portal; only
+-- billing may pause, cancel or create one.
+drop policy if exists subscriptions_read on subscriptions;
+create policy subscriptions_read on subscriptions
+  for select using (
+    has_capability('billing', 'view')
+    or customer_id in (
+      select id from customers where portal_user_id = clerk_user_id()
+    )
+  );
+
+drop policy if exists subscriptions_write on subscriptions;
+create policy subscriptions_write on subscriptions
   for all
   using (has_capability('billing', 'write'))
   with check (has_capability('billing', 'write'));

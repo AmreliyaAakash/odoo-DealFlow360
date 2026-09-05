@@ -102,3 +102,25 @@ export function formatWeekday(date: Date | string): string {
     day: "numeric",
   });
 }
+
+/**
+ * "3h ago" — how long ago an ISO timestamp was.
+ *
+ * Coarse on purpose: an activity feed is read to answer "is this fresh", and a
+ * second-accurate string invites the reader to compare two entries that a
+ * database write order already settled. Anything past a week gets the date,
+ * because "23d ago" is not something anyone converts in their head.
+ */
+export function relativeTime(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso);
+  const seconds = Math.round((now.getTime() - then.getTime()) / 1000);
+
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 0) return "just now";
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604_800) return `${Math.floor(seconds / 86_400)}d ago`;
+
+  return formatDayMonth(then);
+}

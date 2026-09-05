@@ -23,6 +23,9 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
   const [countering, setCountering] = useState(false);
   const [requested, setRequested] = useState("");
   const [note, setNote] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(
+    quote.requestedDeliveryDate ?? "",
+  );
   const [busy, setBusy] = useState<"counter" | "confirm" | null>(null);
   const [message, setMessage] = useState<
     { tone: "ok" | "error"; text: string } | null
@@ -41,7 +44,7 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
         body: JSON.stringify(
           action === "counter"
             ? { action, discountPct: Number(requested), note }
-            : { action },
+            : { action, requestedDeliveryDate: deliveryDate || null },
         ),
       });
       const body = await response.json();
@@ -79,7 +82,12 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
     return (
       <section className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 p-4 text-xs text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-400">
         <CheckCircleIcon size={16} weight="fill" />
-        You confirmed this quotation. Nothing further is needed from you.
+        <span>
+          You confirmed this quotation. Nothing further is needed from you.
+          {quote.requestedDeliveryDate ? (
+            <> Delivery requested by {quote.requestedDeliveryDate}.</>
+          ) : null}
+        </span>
       </section>
     );
   }
@@ -94,6 +102,20 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
             {formatPercent(quote.maxDiscountPct / 100)} off
           </p>
         </div>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] text-muted-foreground">
+            Requested delivery date
+          </span>
+          <input
+            type="date"
+            value={deliveryDate}
+            min={today()}
+            onChange={(event) => setDeliveryDate(event.target.value)}
+            disabled={!confirmable || busy !== null}
+            className="h-8 rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent focus-visible:bg-background focus-visible:ring-sky-500 disabled:opacity-50"
+          />
+        </label>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
@@ -185,4 +207,12 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
       ) : null}
     </section>
   );
+}
+
+/** Today as `YYYY-MM-DD`, so the picker cannot offer a date already past. */
+function today(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
 }

@@ -83,12 +83,28 @@ on conflict do nothing;
 -- ============================================================ demo customer
 -- Set `portal_user_id` to a real Clerk user ID to exercise the portal (B8).
 
-insert into customers (name, email, tier, portal_user_id) values
-  ('Northwind Logistics',  'ops@northwind.example',  'gold',     null),
-  ('Helios Manufacturing', 'it@helios.example',      'silver',   null),
-  ('Vertex Retail Group',  'procure@vertex.example', 'platinum', null),
-  ('Bluepeak Systems',     'admin@bluepeak.example', 'standard', null)
+insert into customers (name, email, phone, address, tier, portal_user_id) values
+  ('Northwind Logistics',  'ops@northwind.example',  '+91 22 4000 1180',
+   E'Unit 7, Sahar Cargo Complex
+Andheri East, Mumbai 400099',    'gold',     null),
+  ('Helios Manufacturing', 'it@helios.example',      '+91 20 6725 3311',
+   E'Plot 14, Chakan MIDC Phase II
+Pune 410501',                  'silver',   null),
+  ('Vertex Retail Group',  'procure@vertex.example', '+91 80 4155 9020',
+   E'Prestige Tech Park, Tower C
+Marathahalli, Bengaluru 560103', 'platinum', null),
+  ('Bluepeak Systems',     'admin@bluepeak.example', '+91 44 2815 7744',
+   E'3rd Floor, Tidel Park
+Taramani, Chennai 600113',             'standard', null)
 on conflict do nothing;
+
+-- Backfill for a database seeded before contact details existed: the portal's
+-- Profile tab is only worth opening if there is something in it.
+update customers
+   set phone   = coalesce(phone, '+91 22 4000 1180'),
+       address = coalesce(address, E'Unit 7, Sahar Cargo Complex
+Andheri East, Mumbai 400099')
+ where name = 'Northwind Logistics';
 
 -- ============================================================ upsell rules
 
@@ -157,6 +173,45 @@ update warehouse_stock ws
  where ws.warehouse_id = w.id
    and ws.product_id = p.id
    and p.sku = 'SUB-PRM';
+
+-- ============================================================ reorder rules
+--
+-- When to bring more stock in. Written against the stock levels set above so
+-- the reorder panel opens with every health band showing rather than an empty
+-- table: the R650 is below its point at all four sites, premium support is out
+-- at three and healthy at the fourth, the installation service sits above its
+-- point except at the smallest warehouse, and standard support lands exactly
+-- on its point in Dallas — the one band the others never produce.
+--
+-- reorder_qty is above reorder_point in every rule, which the table also
+-- enforces: a delivery that lands and leaves stock still below the point would
+-- trip the rule again on the next check, forever.
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 10, 25, 14
+from warehouses w cross join products p
+where p.sku = 'SRV-R650'
+on conflict (warehouse_id, product_id) do nothing;
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 5, 20, 3
+from warehouses w cross join products p
+where p.sku = 'SUB-PRM'
+on conflict (warehouse_id, product_id) do nothing;
+
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 10, 40, 7
+from warehouses w cross join products p
+where p.sku = 'SVC-INST'
+on conflict (warehouse_id, product_id) do nothing;
+
+-- Dallas holds exactly 15 of these, which is the reorder point: the "at reorder
+-- point" band, which no other seeded line produces.
+insert into replenishment_rules (warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days)
+select w.id, p.id, 15, 40, 5
+from warehouses w cross join products p
+where p.sku = 'SUB-STD'
+on conflict (warehouse_id, product_id) do nothing;
 
 -- ============================================================ promotions
 --

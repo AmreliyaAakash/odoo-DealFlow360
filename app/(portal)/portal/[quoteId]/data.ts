@@ -33,9 +33,16 @@ type QuoteRow = {
   discount_total: number | null;
   net_total: number | null;
   max_discount_pct: number | null;
+  requested_delivery_date: string | null;
   submitted_at: string | null;
   created_at: string | null;
-  customers: { name: string | null } | null;
+  customers: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    tier: string | null;
+  } | null;
   quotation_lines: LineRow[] | null;
 };
 
@@ -63,8 +70,8 @@ export async function loadPortalQuote(
       .from("quotations")
       .select(
         `id, customer_id, reference, status, notes, valid_until, subtotal, discount_total, net_total,
-         max_discount_pct, submitted_at, created_at,
-         customers(name),
+         max_discount_pct, requested_delivery_date, submitted_at, created_at,
+         customers(name, email, phone, address, tier),
          quotation_lines(id, qty, discount_pct, unit_price,
                          products(name, category, sku, cadence))`,
       )
@@ -146,6 +153,14 @@ export async function loadPortalQuote(
       awaitingDesk: row.status === "pending_approval",
       settled: row.status === "won",
       maxDiscountPct: Number(row.max_discount_pct ?? 0),
+      requestedDeliveryDate: row.requested_delivery_date,
+      profile: {
+        name: row.customers?.name ?? "Your organisation",
+        email: row.customers?.email ?? null,
+        phone: row.customers?.phone ?? null,
+        address: row.customers?.address ?? null,
+        tier: row.customers?.tier ?? "standard",
+      },
       validUntil: row.valid_until,
       notes: row.notes,
       subtotal: Number(row.subtotal ?? 0),

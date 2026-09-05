@@ -105,6 +105,7 @@ export function PendingApprovalsTable({
               <th className="w-8" />
               <th className="px-2 py-2 font-medium">Rep</th>
               <th className="px-2 py-2 font-medium">Customer</th>
+              <th className="w-32 px-2 py-2 font-medium">Assigned To</th>
               <th className="w-36 px-2 py-2 font-medium">Blended Risk</th>
               <th className="w-28 px-2 py-2 text-right font-medium">Amount</th>
               <th className="w-24 px-2 py-2 text-right font-medium">Lines</th>
@@ -132,7 +133,7 @@ export function PendingApprovalsTable({
             {deals.length === 0 ? (
               <tr className="border-t border-border/60">
                 <td
-                  colSpan={canDecide ? 7 : 6}
+                  colSpan={canDecide ? 8 : 7}
                   className="px-2 py-10 text-center text-muted-foreground"
                 >
                   {emptyText}
@@ -200,8 +201,11 @@ function DealRows({
         </td>
 
         <td className="px-2 py-2.5">
+          {/* The row opens the approval screen, not the builder: an approver
+              wants the risk breakdown and the audit trail, and the quotation is
+              one click further on from there. */}
           <Link
-            href={`/quotations/${deal.id}`}
+            href={`/approvals/${deal.id}`}
             className="font-medium hover:text-amber-600 dark:hover:text-amber-400"
           >
             {deal.repName}
@@ -212,6 +216,26 @@ function DealRows({
         </td>
 
         <td className="px-2 py-2.5">{deal.customer}</td>
+
+        {/* Which desk the deal is parked on. A quote can need two levels;
+            naming both stops an approver assuming their sign-off is the last
+            one and chasing the customer before finance has looked. */}
+        <td className="px-2 py-2.5">
+          {deal.requiredApprovals.length === 0 ? (
+            <span className="text-[11px] text-muted-foreground">Unrouted</span>
+          ) : (
+            <span className="flex flex-wrap gap-1">
+              {deal.requiredApprovals.map((level) => (
+                <span
+                  key={level}
+                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize"
+                >
+                  {level}
+                </span>
+              ))}
+            </span>
+          )}
+        </td>
 
         <td className="px-2 py-2.5">
           <span className="flex items-center gap-2">
@@ -274,7 +298,7 @@ function DealRows({
       <AnimatePresence initial={false}>
         {expanded ? (
           <tr>
-            <td colSpan={canDecide ? 7 : 6} className="p-0">
+            <td colSpan={canDecide ? 8 : 7} className="p-0">
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}

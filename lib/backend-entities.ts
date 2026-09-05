@@ -1,7 +1,7 @@
 import type { Module } from "@/lib/permissions";
 
 /**
- * The four admin config tables, described once.
+ * The admin config tables, described once.
  *
  * The pages render from this and the API validates against it, so a field can
  * never be editable on screen and quietly rejected on save. No server-only
@@ -13,6 +13,8 @@ export const BACKEND_ENTITIES = [
   "discount-rules",
   "warehouses",
   "subscriptions",
+  "upsell-rules",
+  "replenishment",
 ] as const;
 
 export type BackendEntity = (typeof BACKEND_ENTITIES)[number];
@@ -23,7 +25,27 @@ export function isBackendEntity(value: unknown): value is BackendEntity {
   );
 }
 
-export type FieldType = "text" | "number" | "select" | "boolean";
+export type FieldType =
+  | "text"
+  | "number"
+  | "select"
+  | "boolean"
+  | "reference";
+
+/**
+ * Where a `reference` field gets its choices.
+ *
+ * Named rather than inlined so the page can load every lookup a config needs in
+ * one pass, and so the API can check a submitted id against the same table the
+ * dropdown was built from — a stale tab offering a product that has since been
+ * archived is caught on save rather than written.
+ */
+export type ReferenceSource = {
+  table: string;
+  labelColumn: string;
+  /** Only rows where this column is true are offered. */
+  activeColumn?: string;
+};
 
 export type EntityField = {
   key: string;
@@ -31,11 +53,27 @@ export type EntityField = {
   type: FieldType;
   /** Options for a select; the API rejects anything outside them. */
   options?: readonly string[];
+  /** Where a reference field's options come from. */
+  reference?: ReferenceSource;
   required?: boolean;
   /** Not editable after creation. */
   immutable?: boolean;
   min?: number;
   max?: number;
+  /** Shown under the input in the editor. */
+  hint?: string;
+};
+
+const PRODUCT_REF: ReferenceSource = {
+  table: "products",
+  labelColumn: "name",
+  activeColumn: "active",
+};
+
+const WAREHOUSE_REF: ReferenceSource = {
+  table: "warehouses",
+  labelColumn: "name",
+  activeColumn: "active",
 };
 
 export type EntityConfig = {
@@ -180,6 +218,119 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
     ],
     columns: ["id", "name", "cadence", "unit_price", "min_term_months", "active"],
   },
+
+  "upsell-rules": {
+    table: "upsell_rules",
+    title: "Upsell Rules",
+    module: "upsellRules",
+    labelColumn: "name",
+    orderBy: "priority",
+    softDelete: true,
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      {
+        key: "trigger_product_id",
+        label: "Triggered by product",
+        type: "reference",
+        reference: PRODUCT_REF,
+        hint: "Fires when this exact product is on the quote.",
+      },
+      {
+        key: "trigger_category",
+        label: "…or by category",
+        type: "text",
+        hint: "Fires on any product in this category. Use one trigger or the other.",
+      },
+      {
+        key: "suggested_product_id",
+        label: "Suggest",
+        type: "reference",
+        reference: PRODUCT_REF,
+        required: true,
+      },
+      {
+        key: "priority",
+        label: "Priority",
+        type: "number",
+        min: 0,
+        hint: "Lower wins when several rules suggest the same product.",
+      },
+      {
+        key: "min_margin_pct",
+        label: "Min margin %",
+        type: "number",
+        min: 0,
+        max: 100,
+        hint: "Below this margin the suggestion is withheld. Blank uses the 15% floor.",
+      },
+    ],
+    columns: [
+      "id",
+      "name",
+      "trigger_product_id",
+      "trigger_category",
+      "suggested_product_id",
+      "priority",
+      "min_margin_pct",
+      "active",
+    ],
+  },
+
+  replenishment: {
+    table: "replenishment_rules",
+    title: "Replenishment Rules",
+    module: "warehouses",
+    labelColumn: "id",
+    orderBy: "reorder_point",
+    softDelete: true,
+    fields: [
+      {
+        key: "warehouse_id",
+        label: "Warehouse",
+        type: "reference",
+        reference: WAREHOUSE_REF,
+        required: true,
+      },
+      {
+        key: "product_id",
+        label: "Product",
+        type: "reference",
+        reference: PRODUCT_REF,
+        required: true,
+      },
+      {
+        key: "reorder_point",
+        label: "Reorder at",
+        type: "number",
+        required: true,
+        min: 0,
+        hint: "When available stock falls to this level, the line needs reordering.",
+      },
+      {
+        key: "reorder_qty",
+        label: "Reorder quantity",
+        type: "number",
+        required: true,
+        min: 1,
+        hint: "How much to bring in. Suggested orders round up to a multiple of this.",
+      },
+      {
+        key: "lead_time_days",
+        label: "Lead time (days)",
+        type: "number",
+        min: 0,
+      },
+    ],
+    columns: [
+      "id",
+      "warehouse_id",
+      "product_id",
+      "reorder_point",
+      "reorder_qty",
+      "lead_time_days",
+      "active",
+    ],
+  },
 };
 
 export function entityConfig(entity: BackendEntity): EntityConfig {
@@ -268,6 +419,17 @@ export function parseRow(
       return { error: `${field.label} must be text` };
     }
 
+    if (field.type === "reference") {
+      // Shape only. Whether the row exists is the foreign key's job — checking
+      // it here as well would be a second query that can still be wrong by the
+      // time the insert runs.
+      if (!UUID.test(raw)) {
+        return { error: `${field.label} must be chosen from the list` };
+      }
+      values[field.key] = raw;
+      continue;
+    }
+
     if (field.type === "select" && field.options && !field.options.includes(raw)) {
       return { error: `${field.label} must be one of: ${field.options.join(", ")}` };
     }
@@ -275,5 +437,63 @@ export function parseRow(
     values[field.key] = raw.trim();
   }
 
+  // On a create every field is present, so the cross-field rules can be
+  // settled here. On an edit they cannot — a field the request did not send is
+  // unknown at this point — so PATCH re-checks the merged row instead.
+  if (!partial) {
+    const crossField = checkEntityRules(entity, values);
+    if (crossField) return { error: crossField };
+  }
+
   return { values };
+}
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Rules that involve more than one field, which the field list cannot express.
+ *
+ * These are the ones that produce config that looks saved and silently does
+ * nothing — a rule with no trigger never matches a cart, a rule suggesting what
+ * it triggers on is noise, and a reorder quantity that cannot lift stock above
+ * its own reorder point re-fires forever. Rejecting them at the door is much
+ * kinder than leaving an admin to work out why their rule never fires.
+ *
+ * Always given a complete row: a create builds one from the request, an edit
+ * merges the request over what is stored. Judging a half-row would either miss
+ * a rule the edit broke or reject an edit for config that was already there.
+ */
+export function checkEntityRules(
+  entity: BackendEntity,
+  row: Record<string, unknown>,
+): string | null {
+  const value = (key: string) => row[key] ?? null;
+
+  if (entity === "upsell-rules") {
+    if (!value("trigger_product_id") && !value("trigger_category")) {
+      return "An upsell rule needs a trigger: choose a product, or name a category.";
+    }
+
+    if (
+      value("suggested_product_id") !== null &&
+      value("suggested_product_id") === value("trigger_product_id")
+    ) {
+      return "A rule cannot suggest the product that triggers it.";
+    }
+  }
+
+  if (entity === "replenishment") {
+    const point = Number(value("reorder_point") ?? 0);
+    const qty = Number(value("reorder_qty") ?? 0);
+
+    // One delivery has to clear the trigger. Stock can be as low as zero when
+    // the rule fires, so a quantity no larger than the reorder point can land
+    // and leave the line still below it — and the rule fires again, forever.
+    if (qty <= point) {
+      return `Reorder quantity must be more than the reorder point (${point}), or a delivery would arrive and still leave stock below it.`;
+    }
+  }
+
+  return null;
 }

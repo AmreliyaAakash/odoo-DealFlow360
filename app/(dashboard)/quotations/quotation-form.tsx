@@ -12,10 +12,15 @@ import {
 } from "@phosphor-icons/react";
 import {
   asCustomerTier,
+  CUSTOMER_TIERS,
   ceilingHelperText,
   discountCeiling,
+  priceForTier,
+  priceRuleSummary,
+  TIER_LABELS,
   type CustomerTier,
   type DiscountRule,
+  type PriceListEntry,
 } from "@/lib/business-logic";
 import {
   PRODUCT_KIND_LABELS,
@@ -54,6 +59,8 @@ export type QuotationDraft = {
   id: string;
   customerId: string | null;
   reference: string | null;
+  /** Current status, so the form can say what saving will actually do. */
+  status?: string | null;
   lines: {
     productId: string;
     qty: number;
@@ -117,6 +124,7 @@ export function QuotationForm({
   catalog,
   plans,
   discountRules,
+  priceLists,
   draft,
   initialProductId,
 }: {
@@ -124,12 +132,15 @@ export function QuotationForm({
   catalog: Product[];
   plans: SubscriptionPlan[];
   discountRules: DiscountRule[];
+  priceLists: PriceListEntry[];
   draft?: QuotationDraft;
   /** Seeds the first line, for arriving from a suggestion. New quotes only. */
   initialProductId?: string;
 }) {
   const router = useRouter();
   const editing = draft !== undefined;
+  /** Being edited while an approver is holding it. */
+  const inApproval = draft?.status === "pending_approval";
 
   const [customerId, setCustomerId] = useState<string | null>(
     draft?.customerId ?? null,
@@ -163,6 +174,53 @@ export function QuotationForm({
     () => asCustomerTier(customers.find((c) => c.id === customerId)?.tier),
     [customers, customerId],
   );
+
+  /**
+   * Which tier's price list the cart is priced against.
+   *
+   * Defaults to the customer's own tier, which is what should happen almost
+   * always. It is a control rather than a fixed rule because a rep quoting a
+   * standard account being onboarded onto Gold terms needs to show the Gold
+   * price today, and the alternative — typing the numbers in by hand — loses
+   * the record of which list they came from.
+   */
+  const [priceTier, setPriceTier] = useState<CustomerTier | null>(null);
+  const activeTier = priceTier ?? tier;
+
+  const priceTierOptions = useMemo<SelectOption[]>(
+    () =>
+      CUSTOMER_TIERS.map((option) => ({
+        value: option,
+        label:
+          option === tier
+            ? `${TIER_LABELS[option]} (customer's tier)`
+            : TIER_LABELS[option],
+      })),
+    [tier],
+  );
+
+  /** Re-prices every line that still sits at its list-derived price. */
+  function applyPriceList(next: CustomerTier) {
+    setPriceTier(next);
+    setVerdict(null);
+
+    setLines((current) =>
+      current.map((line) => {
+        const product = line.productId
+          ? productsById.get(line.productId)
+          : undefined;
+        if (!product) return line;
+
+        // A price the rep typed themselves is theirs to keep — switching lists
+        // must not silently undo a negotiated number. Only prices that still
+        // match what the previous list produced get moved.
+        const previous = priceForTier(product, activeTier, priceLists);
+        if (Math.abs(line.unitPrice - previous) > 0.005) return line;
+
+        return { ...line, unitPrice: priceForTier(product, next, priceLists) };
+      }),
+    );
+  }
 
   const customerOptions = useMemo<SelectOption[]>(
     () =>
@@ -238,11 +296,12 @@ export function QuotationForm({
     const product = productsById.get(productId);
     if (!product) return;
 
-    // Selecting a product refills the price from the catalog and clears a
-    // billing cycle left over from a previous, subscription product.
+    // Selecting a product refills the price from the active price list — not
+    // list price — and clears a billing cycle left over from a previous,
+    // subscription product.
     update(key, {
       productId,
-      unitPrice: product.list_price,
+      unitPrice: priceForTier(product, activeTier, priceLists),
       subscriptionPlanId: null,
       touched: { product: true },
     });
@@ -364,6 +423,14 @@ export function QuotationForm({
       {verdict ? <ApprovalBanner verdict={verdict} /> : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
+      {inApproval ? (
+        <Notice>
+          This quotation is with the approvals desk. You can still change it —
+          saving re-runs the routing on the new figures and restarts the round,
+          so any sign-off already given no longer counts.
+        </Notice>
+      ) : null}
+
       <Panel>
         <PanelHeader
           icon={UserIcon}
@@ -397,6 +464,20 @@ export function QuotationForm({
               onChange={(event) => setReference(event.target.value)}
               placeholder="Optional"
               className="h-8 w-full rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500"
+            />
+          </Field>
+
+          <Field
+            label="Price list"
+            className="w-52"
+            helper={priceListHelper(activeTier, priceLists)}
+            helperTone={priceTier !== null && priceTier !== tier ? "warn" : undefined}
+          >
+            <SearchableSelect
+              label="Price list"
+              value={activeTier}
+              options={priceTierOptions}
+              onChange={(value) => applyPriceList(value as CustomerTier)}
             />
           </Field>
 
@@ -490,7 +571,11 @@ export function QuotationForm({
                 {saving === "draft" ? (
                   <SpinnerIcon size={13} className="animate-spin" />
                 ) : null}
-                {saving === "draft" ? "Saving" : "Save draft"}
+                {saving === "draft"
+                  ? "Saving"
+                  : inApproval
+                    ? "Save changes"
+                    : "Save draft"}
               </button>
 
               <button
@@ -504,7 +589,11 @@ export function QuotationForm({
                 ) : (
                   <PaperPlaneTiltIcon size={13} />
                 )}
-                {saving === "submit" ? "Submitting" : "Submit for approval"}
+                {saving === "submit"
+                  ? "Submitting"
+                  : inApproval
+                    ? "Resubmit for approval"
+                    : "Submit for approval"}
               </button>
             </div>
 
@@ -629,6 +718,33 @@ function LineRow({
             onChange({ discountPct, touched: { discount: true } })
           }
         />
+      </Field>
+
+      {/* Screen 4's Limit and Status columns. The helper text under Discount
+          already names the rule; these two say the same thing as a number and a
+          verdict, which is what an approver skims for. */}
+      <Field label="Limit" className="w-20">
+        <div className="flex h-8 items-center">
+          <span className="text-xs tabular-nums">
+            {ceiling === null ? "—" : `${ceiling.toFixed(0)}%`}
+          </span>
+        </div>
+      </Field>
+
+      <Field label="Status" className="w-28">
+        <div className="flex h-8 items-center">
+          {ceiling === null ? (
+            <span className="text-[11px] text-muted-foreground">No ceiling</span>
+          ) : overCeiling ? (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium tabular-nums text-amber-700 dark:text-amber-400">
+              OVER +{(line.discountPct - ceiling).toFixed(0)}pt
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+              OK
+            </span>
+          )}
+        </div>
       </Field>
 
       {subscription ? (
@@ -850,4 +966,24 @@ function toVerdict(result: Record<string, unknown>): ApprovalVerdictView {
       ? result.requiredApprovals
       : undefined,
   };
+}
+
+/**
+ * What the chosen price list actually does — the rule, not just the tier name.
+ *
+ * A rep switching lists is asking "what will this cost"; naming the rule
+ * ("Gold: 10% off base") answers that without them having to open the catalog
+ * and compare two numbers.
+ */
+function priceListHelper(
+  tier: CustomerTier,
+  priceLists: PriceListEntry[],
+): string {
+  const entry = priceLists.find(
+    (row) => row.tier === tier && row.productId === null,
+  );
+
+  return entry
+    ? `${TIER_LABELS[tier]}: ${priceRuleSummary(entry)}`
+    : `${TIER_LABELS[tier]}: list price unless a product sets its own`;
 }

@@ -39,6 +39,7 @@ export default async function NewQuotationPage({
         catalog={data.catalog}
         plans={data.plans}
         discountRules={data.discountRules}
+        priceLists={data.priceLists}
         initialProductId={initialProductId}
       />
     </main>

@@ -52,7 +52,12 @@ export async function POST(
   const { actor } = authorized;
   const { id } = await ctx.params;
 
-  let payload: { action?: unknown; discountPct?: unknown; note?: unknown };
+  let payload: {
+    action?: unknown;
+    discountPct?: unknown;
+    note?: unknown;
+    requestedDeliveryDate?: unknown;
+  };
   try {
     payload = await request.json();
   } catch {
@@ -102,7 +107,7 @@ export async function POST(
   }
 
   return payload.action === "confirm"
-    ? confirm(supabase, quotation, actor.userId)
+    ? confirm(supabase, quotation, actor.userId, payload.requestedDeliveryDate)
     : counter(supabase, quotation, actor.userId, payload.discountPct, payload.note);
 }
 
@@ -223,8 +228,37 @@ async function counter(
  * Confirm
  * ------------------------------------------------------------------ */
 
+/**
+ * A plain `YYYY-MM-DD` that is not in the past.
+ *
+ * Rejected rather than clamped: a date the customer did not type is a date
+ * nobody agreed to, and quietly moving it to today would have fulfilment
+ * planning against a promise the customer never made.
+ */
+function parseDeliveryDate(value: unknown): string | null | "invalid" {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !/^d{4}-d{2}-d{2}$/.test(value)) {
+    return "invalid";
+  }
+
+  const asked = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(asked.getTime())) return "invalid";
+
+  const today = new Date();
+  const floor = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+
+  return asked < floor ? "invalid" : value;
+}
+
 /** Accept the terms as they stand. Approved quotations only. */
-async function confirm(supabase: Supabase, quotation: QuotationRow, actorId: string) {
+async function confirm(
+  supabase: Supabase,
+  quotation: QuotationRow,
+  actorId: string,
+  requestedDeliveryDate: unknown,
+) {
   if (quotation.status !== "approved") {
     return NextResponse.json(
       {
@@ -237,9 +271,22 @@ async function confirm(supabase: Supabase, quotation: QuotationRow, actorId: str
     );
   }
 
+  const deliveryDate = parseDeliveryDate(requestedDeliveryDate);
+  if (deliveryDate === "invalid") {
+    return NextResponse.json(
+      { error: "A requested delivery date must be a real date, today or later." },
+      { status: 400 },
+    );
+  }
+
   const { error } = await supabase
     .from("quotations")
-    .update({ status: "won" })
+    .update({
+      status: "won",
+      // Only overwrite when one was given: confirming without a date must not
+      // erase a date agreed earlier in the conversation.
+      ...(deliveryDate ? { requested_delivery_date: deliveryDate } : {}),
+    })
     .eq("id", quotation.id);
 
   if (error) {
@@ -250,10 +297,16 @@ async function confirm(supabase: Supabase, quotation: QuotationRow, actorId: str
     quotation_id: quotation.id,
     author_id: actorId,
     author_kind: "customer",
-    body: "Quotation confirmed. Please proceed to fulfilment.",
+    body: deliveryDate
+      ? `Quotation confirmed. Requested delivery by ${deliveryDate}.`
+      : "Quotation confirmed. Please proceed to fulfilment.",
   });
 
-  return NextResponse.json({ action: "confirm", status: "won" });
+  return NextResponse.json({
+    action: "confirm",
+    status: "won",
+    requestedDeliveryDate: deliveryDate,
+  });
 }
 
 /** Whether this portal user is the contact on the quotation's customer. */

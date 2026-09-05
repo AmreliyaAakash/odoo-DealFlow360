@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
-import { loadPendingApprovals } from "@/lib/approvals-server";
+import { loadApprovalBoard } from "@/lib/approvals-server";
 import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import { Notice, PageHeader } from "@/components/dashboard/panel";
-import { PendingApprovalsTable } from "@/components/dashboard/pending-approvals-table";
+import { ApprovalsBoard } from "./approvals-board";
 
 /**
  * B4 — the approval queue.
@@ -23,7 +23,7 @@ export default async function ApprovalsPage() {
   if (!canWith(access, "approvals", "view")) redirect("/unauthorized");
 
   const canDecide = canWith(access, "approvals", "write");
-  const { pending, loadError } = await loadPendingApprovals(role);
+  const { pending, returned, approved, loadError } = await loadApprovalBoard(role);
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
@@ -41,14 +41,11 @@ export default async function ApprovalsPage() {
 
       {loadError ? <Notice tone="danger">{loadError}</Notice> : null}
 
-      <PendingApprovalsTable
-        deals={pending}
-        title={canDecide ? "Waiting on you" : "In review"}
-        delay={80}
+      <ApprovalsBoard
+        pending={pending}
+        returned={returned}
+        approved={approved}
         canDecide={canDecide}
-        emptyText={
-          canDecide ? "Nothing is waiting on you." : "None of your deals are in review."
-        }
       />
     </main>
   );
