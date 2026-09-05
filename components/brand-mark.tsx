@@ -45,12 +45,16 @@ const SIZES = {
     wordmark: "h-4.5",
     wordmarkSizes: "130px",
   },
+  // Sized from the upstream "enhance brand logo sizing and visual balance"
+  // commit, which deliberately made the mark bigger. That intent is kept here
+  // rather than in five hand-written copies, so it now comes with the right
+  // aspect ratio instead of the 180x32 (5.63:1) that commit declared.
   md: {
-    tile: "size-8 rounded-lg p-1.5 shadow-sm",
+    tile: "size-9 rounded-xl p-2 shadow-sm",
     glyph: "size-5",
     glyphSizes: "20px",
-    wordmark: "h-6",
-    wordmarkSizes: "174px",
+    wordmark: "h-7",
+    wordmarkSizes: "202px",
   },
   lg: {
     tile: "size-14 rounded-2xl p-2.5 shadow-md",

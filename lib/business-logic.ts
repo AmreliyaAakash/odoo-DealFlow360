@@ -967,7 +967,6 @@ export const STALLED_AFTER_BY_STATUS: Record<string, number> = {
 export const DISCOUNT_ANOMALY_PCT = 35;
 
 /**
-<<<<<<< Updated upstream
  * How far above their own baseline a rep may go before it is worth a look:
  * half as deep again, and at least this many points clear in absolute terms.
  * Both, because 3% against a 2% baseline is 50% deeper and means nothing.

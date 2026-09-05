@@ -444,8 +444,7 @@ export function DashboardSidebar({
           title={view.expanded === false ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
             "ml-auto flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-            view.label === "hidden" ? "hidden" : "",
-            view.label === "hidden lg:inline" ? "hidden lg:flex" : "flex",
+            view.collapse,
           )}
         >
           <CaretLeftIcon size={14} weight="bold" />
