@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/auth";
 
 /** STRUCTURE ONLY — suggestion engine not implemented. */
 
@@ -14,10 +14,8 @@ export type UpsellSuggestion = {
 };
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("upsellPanel", "use");
+  if (!authorized.ok) return authorized.response;
 
   const productId = new URL(request.url).searchParams.get("productId");
   if (!productId) {

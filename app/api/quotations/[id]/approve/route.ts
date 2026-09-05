@@ -1,12 +1,16 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { ApprovalLevel } from "@/lib/business-logic";
+import { requireCapability } from "@/lib/auth";
+import {
+  APPROVAL_LEVELS,
+  APPROVAL_LEVEL_NAMES,
+  approvalLevelForRole,
+  canActAtLevel,
+  type ApprovalLevelName,
+} from "@/lib/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const ACTIONS = ["approve", "reject", "return"] as const;
 type Action = (typeof ACTIONS)[number];
-
-const APPROVER_LEVELS: ApprovalLevel[] = ["manager", "finance", "admin"];
 
 /** Only a submitted quotation can be decided on. */
 const DECIDABLE_STATUSES = new Set(["pending_approval"]);
@@ -26,27 +30,27 @@ type QuotationRow = {
   required_approvals: string[] | null;
 };
 
+/**
+ * Decide on a quotation.
+ *
+ * Reaching this endpoint is not the same as being allowed to act on it. The
+ * matrix gives managers level 1 and finance level 2, so a manager who calls this
+ * against a finance-level requirement is refused — with a valid session, a real
+ * role, and a quotation they are otherwise allowed to read.
+ */
 export async function POST(
   request: Request,
   ctx: RouteContext<"/api/quotations/[id]/approve">,
 ) {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Deciding is a write. A rep has view-only access to approvals, so they are
+  // turned away here even for their own quotation.
+  const authorized = await requireCapability("approvals", "write");
+  if (!authorized.ok) return authorized.response;
 
-  const role = sessionClaims?.publicMetadata?.role;
-  if (!role || !APPROVER_LEVELS.includes(role as ApprovalLevel)) {
-    return NextResponse.json(
-      { error: "Your role cannot approve quotations" },
-      { status: 403 },
-    );
-  }
-  const level = role as ApprovalLevel;
-
+  const { actor } = authorized;
   const { id } = await ctx.params;
 
-  let payload: { action?: unknown; reason?: unknown };
+  let payload: { action?: unknown; reason?: unknown; level?: unknown };
   try {
     payload = await request.json();
   } catch {
@@ -74,6 +78,11 @@ export async function POST(
     );
   }
 
+  const level = resolveLevel(payload.level, actor.role);
+  if ("error" in level) {
+    return NextResponse.json({ error: level.error }, { status: level.status });
+  }
+
   const supabase = createServerSupabaseClient();
 
   const { data: quotation, error: loadError } = await supabase
@@ -96,20 +105,21 @@ export async function POST(
   }
 
   const required = quotation.required_approvals ?? [];
+
   // Admins can act on anything; other roles only on levels this deal asked for.
-  if (level !== "admin" && !required.includes(level)) {
+  if (actor.role !== "admin" && !required.includes(level.name)) {
     return NextResponse.json(
-      { error: `This quotation does not require ${level} approval` },
+      { error: `This quotation does not require ${level.name} approval` },
       { status: 403 },
     );
   }
 
   const { error: insertError } = await supabase.from("approvals").insert({
     quotation_id: id,
-    level,
+    level: level.name,
     action,
     reason: typeof reason === "string" ? reason.trim() : null,
-    decided_by: userId,
+    decided_by: actor.userId,
     decided_at: new Date().toISOString(),
   });
 
@@ -133,7 +143,64 @@ export async function POST(
       ? await outstandingLevels(supabase, id, required)
       : [];
 
-  return NextResponse.json({ id, action, level, status, outstandingApprovals: outstanding });
+  return NextResponse.json({
+    id,
+    action,
+    level: level.name,
+    levelNumber: APPROVAL_LEVELS[level.name],
+    status,
+    outstandingApprovals: outstanding,
+  });
+}
+
+/**
+ * Works out which tier this decision is recorded at, and refuses one the caller
+ * may not act at.
+ *
+ * The tier can be named explicitly in the body — as `1`/`2` or as a role name —
+ * which is what lets a client be specific about what it thinks it is clearing.
+ * Omitted, it defaults to the caller's own tier. Either way it is checked
+ * against the role: a manager naming level 2 is rejected rather than quietly
+ * downgraded to level 1, because the two mean different things to the caller.
+ */
+function resolveLevel(
+  requested: unknown,
+  role: "manager" | "finance" | "admin" | "rep" | "customer",
+): { name: ApprovalLevelName } | { error: string; status: 400 | 403 } {
+  const own = approvalLevelForRole(role);
+
+  if (requested === undefined || requested === null) {
+    if (own !== null) return { name: APPROVAL_LEVEL_NAMES[own] };
+    // An admin acts at whichever tier they name; there is no default for them.
+    return {
+      error: "level is required: an admin must say which tier they are clearing",
+      status: 400,
+    };
+  }
+
+  const name = asLevelName(requested);
+  if (name === null) {
+    return {
+      error: "level must be 1 (manager) or 2 (finance)",
+      status: 400,
+    };
+  }
+
+  if (!canActAtLevel(role, name)) {
+    return {
+      error: `A ${role} may not act at level ${APPROVAL_LEVELS[name]} (${name})`,
+      status: 403,
+    };
+  }
+
+  return { name };
+}
+
+function asLevelName(value: unknown): ApprovalLevelName | null {
+  if (value === 1 || value === "1") return "manager";
+  if (value === 2 || value === "2") return "finance";
+  if (value === "manager" || value === "finance") return value;
+  return null;
 }
 
 /**

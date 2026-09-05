@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/auth";
+import { requireCapability } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 /** B8 — negotiation thread. RLS limits both sides to their own quotations. */
@@ -17,10 +17,8 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/quotations/[id]/negotiation">,
 ) {
-  const { userId } = await currentUser();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("customerPortal", "view");
+  if (!authorized.ok) return authorized.response;
 
   const { id } = await ctx.params;
   const supabase = createServerSupabaseClient();
@@ -43,11 +41,12 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/quotations/[id]/negotiation">,
 ) {
-  const { userId, role } = await currentUser();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Posting to the thread is a write: the customer who owns the quotation, or
+  // the rep answering them. RLS narrows it further to their own quotation.
+  const authorized = await requireCapability("customerPortal", "write");
+  if (!authorized.ok) return authorized.response;
 
+  const { actor } = authorized;
   const { id } = await ctx.params;
 
   let payload: { body?: unknown };
@@ -62,8 +61,10 @@ export async function POST(
     return NextResponse.json({ error: "body is required" }, { status: 400 });
   }
 
-  // A portal customer has no staff role; anyone with one is posting as the rep.
-  const authorKind: NegotiationMessage["author_kind"] = role ? "rep" : "customer";
+  // The portal side is the `customer` role; every other role that can write
+  // here is staff answering them.
+  const authorKind: NegotiationMessage["author_kind"] =
+    actor.role === "customer" ? "customer" : "rep";
 
   const supabase = createServerSupabaseClient();
 
@@ -71,7 +72,7 @@ export async function POST(
     .from("negotiation_messages")
     .insert({
       quotation_id: id,
-      author_id: userId,
+      author_id: actor.userId,
       author_kind: authorKind,
       body,
     })

@@ -1,31 +1,148 @@
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { NegotiationThread } from "./negotiation-thread";
+import { UserButton } from "@clerk/nextjs";
+import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { PORTAL_STAGE_LABELS } from "@/lib/business-logic";
+import { formatCurrency } from "@/lib/quotations";
+import { requirePortalIdentity } from "../guard";
+import { loadPortalQuote } from "./data";
+import { QuoteStepper } from "./quote-stepper";
+import { QuoteView } from "./quote-view";
 
-/** B8 — customer negotiation view. STRUCTURE ONLY: the quote is not fetched yet. */
+/**
+ * B8 — the customer's view of one quotation. Standalone: no dashboard sidebar,
+ * sky accent, and nothing internal on the page — no cost, margin, risk score or
+ * approval state, all of which RLS would hand over but the customer must not see.
+ */
 export default async function PortalQuotePage({
   params,
 }: PageProps<"/portal/[quoteId]">) {
-  const { userId } = await auth();
-  if (!userId) {
-    redirect("/portal");
+  // Redirects a signed-out visitor; anything else is reported on the page.
+  const access = await requirePortalIdentity();
+  if (!access.ok) {
+    return <PortalNotice reason={access.reason === "notCustomer" ? "notFound" : "unlinked"} />;
   }
 
   const { quoteId } = await params;
+  const result = await loadPortalQuote(quoteId, access.identity);
 
-  // TODO(B8): load the quotation and its lines; RLS already limits a portal user
-  // to quotations belonging to their own `customers` row.
+  if (!result.ok) {
+    return <PortalNotice reason={result.reason} message={result.message} />;
+  }
+
+  const { quote } = result;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-lg font-semibold">Your quotation</h1>
-        <p className="text-sm text-muted-foreground">{quoteId}</p>
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-6">
+      <header className="flex flex-wrap items-center gap-3">
+        <span className="flex size-7 items-center justify-center rounded-md bg-sky-500 text-[11px] font-bold text-white">
+          D
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-tight">DealFlow360</p>
+          <p className="text-[11px] text-muted-foreground">
+            {quote.customerName}
+          </p>
+        </div>
+        <div className="ml-auto">
+          <UserButton />
+        </div>
       </header>
 
-      {/* TODO(B8): render the priced lines and an accept / request-change action. */}
+      {/* Hero: reference, value and where the quote has got to. */}
+      <section className="rounded-2xl bg-card p-5 ring-1 ring-foreground/10 sm:p-6">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
+              Quotation
+            </p>
+            <h1 className="text-lg font-semibold tracking-tight">
+              {quote.reference}
+            </h1>
+          </div>
 
-      <NegotiationThread quoteId={quoteId} />
+          <div className="ml-auto text-right">
+            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
+              Total
+            </p>
+            <p className="text-2xl font-semibold tracking-tight tabular-nums">
+              {formatCurrency(quote.netTotal)}
+            </p>
+          </div>
+        </div>
+
+        {quote.closedLost ? (
+          <p className="mt-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-700 ring-1 ring-red-500/30 dark:text-red-400">
+            This quotation is closed and can no longer be changed. Speak to your
+            account manager if you would like a new one.
+          </p>
+        ) : (
+          <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <SealCheckIcon size={14} className="text-sky-500" />
+            Currently
+            <span className="font-medium text-sky-600 dark:text-sky-400">
+              {PORTAL_STAGE_LABELS[quote.stage]}
+            </span>
+            {quote.validUntil ? (
+              <span className="text-muted-foreground">
+                · valid until{" "}
+                {new Date(quote.validUntil).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+            ) : null}
+          </p>
+        )}
+
+        <div className="mt-6">
+          <QuoteStepper stage={quote.stage} closedLost={quote.closedLost} />
+        </div>
+      </section>
+
+      <QuoteView quote={quote} />
+    </main>
+  );
+}
+
+const NOTICES: Record<string, { title: string; body: string }> = {
+  unlinked: {
+    title: "No portal account linked",
+    body: "Your sign-in is not connected to a customer account yet. Please contact your account manager.",
+  },
+  notFound: {
+    title: "Quotation not available",
+    body: "This quotation does not exist, or it is not associated with your account.",
+  },
+  notReady: {
+    title: "Not ready yet",
+    body: "Your account manager is still preparing this quotation. You will be able to see it once it has been sent.",
+  },
+  error: {
+    title: "Something went wrong",
+    body: "We could not load your quotation. Please try again in a moment.",
+  },
+};
+
+function PortalNotice({
+  reason,
+  message,
+}: {
+  reason: "notFound" | "notReady" | "error" | "unlinked";
+  message?: string;
+}) {
+  const notice = NOTICES[reason];
+
+  return (
+    <main className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-sm rounded-2xl bg-card p-6 text-center ring-1 ring-foreground/10">
+        <h1 className="text-base font-semibold">{notice.title}</h1>
+        <p className="mt-2 text-xs text-muted-foreground">{notice.body}</p>
+        {message ? (
+          <p className="mt-3 rounded-lg bg-muted p-2 text-[11px] text-muted-foreground">
+            {message}
+          </p>
+        ) : null}
+      </div>
     </main>
   );
 }

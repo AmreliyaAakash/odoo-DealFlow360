@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/auth";
 
 /**
  * STRUCTURE ONLY — allocation engine not implemented.
@@ -29,10 +29,8 @@ export type WarehouseSplitResponse = {
 };
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("warehouseSplit", "view");
+  if (!authorized.ok) return authorized.response;
 
   try {
     await request.json();

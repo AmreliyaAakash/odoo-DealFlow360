@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { SealCheckIcon, WarningIcon } from "@phosphor-icons/react";
+import { approvalLevelForRole } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/quotations";
+import { useRole } from "@/lib/use-role";
 import { cn } from "@/lib/utils";
 import {
   DataTable,
@@ -44,6 +46,13 @@ const ACTION_STYLES: Record<Action, string> = {
 
 export function ApprovalQueue({ quotations }: { quotations: PendingQuotation[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const { role, loaded, canWrite } = useRole();
+
+  // A rep watches their own deals move through the queue but never decides on
+  // one, so the controls are absent rather than present-and-disabled: a disabled
+  // Approve button reads as "not yet", which is the wrong story.
+  const mayDecide = loaded && canWrite("approvals");
+  const level = approvalLevelForRole(role);
 
   async function decide(quotationId: string, action: Action) {
     setPendingId(quotationId);
@@ -53,7 +62,9 @@ export function ApprovalQueue({ quotations }: { quotations: PendingQuotation[] }
       await fetch(`/api/quotations/${quotationId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason: null }),
+        // The tier is stated explicitly: the API refuses one this role may not
+        // act at rather than silently choosing for us.
+        body: JSON.stringify({ action, reason: null, level }),
       });
     } finally {
       setPendingId(null);
@@ -64,7 +75,7 @@ export function ApprovalQueue({ quotations }: { quotations: PendingQuotation[] }
     <Panel delay={80}>
       <PanelHeader
         icon={SealCheckIcon}
-        title="Waiting on you"
+        title={mayDecide ? "Waiting on you" : "In review"}
         caption={`${quotations.length} quotation${quotations.length === 1 ? "" : "s"}`}
       />
 
@@ -78,7 +89,7 @@ export function ApprovalQueue({ quotations }: { quotations: PendingQuotation[] }
               <Th className="w-28 text-right">Value</Th>
               <Th className="w-24">Risk</Th>
               <Th>Violations</Th>
-              <Th className="w-60" />
+              {mayDecide ? <Th className="w-60" /> : null}
             </>
           }
         >
@@ -117,29 +128,33 @@ export function ApprovalQueue({ quotations }: { quotations: PendingQuotation[] }
                   </span>
                 )}
               </Td>
-              <Td>
-                <div className="flex gap-1">
-                  {(["approve", "reject", "return"] as const).map((action) => (
-                    <button
-                      key={action}
-                      type="button"
-                      disabled={pendingId === quotation.id}
-                      onClick={() => decide(quotation.id, action)}
-                      className={cn(
-                        "rounded-lg px-2.5 py-1.5 text-[11px] font-medium capitalize transition-colors disabled:opacity-50",
-                        ACTION_STYLES[action],
-                      )}
-                    >
-                      {action}
-                    </button>
-                  ))}
-                </div>
-              </Td>
+              {mayDecide ? (
+                <Td>
+                  <div className="flex gap-1">
+                    {(["approve", "reject", "return"] as const).map((action) => (
+                      <button
+                        key={action}
+                        type="button"
+                        disabled={pendingId === quotation.id}
+                        onClick={() => decide(quotation.id, action)}
+                        className={cn(
+                          "rounded-lg px-2.5 py-1.5 text-[11px] font-medium capitalize transition-colors disabled:opacity-50",
+                          ACTION_STYLES[action],
+                        )}
+                      >
+                        {action}
+                      </button>
+                    ))}
+                  </div>
+                </Td>
+              ) : null}
             </Tr>
           ))}
 
           {quotations.length === 0 ? (
-            <EmptyRow colSpan={6}>Nothing is waiting on you.</EmptyRow>
+            <EmptyRow colSpan={mayDecide ? 6 : 5}>
+              {mayDecide ? "Nothing is waiting on you." : "No deals in review."}
+            </EmptyRow>
           ) : null}
         </DataTable>
       </div>

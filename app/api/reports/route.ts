@@ -1,7 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/auth";
+import type { Scope } from "@/lib/permissions";
 
-/** STRUCTURE ONLY — aggregation queries not implemented. */
+/** STRUCTURE ONLY — aggregation queries are not implemented (A7). */
 
 export type ReportFilters = {
   period: string | null;
@@ -23,27 +24,39 @@ export type ReportRow = {
 
 export type ReportResponse = {
   filters: ReportFilters;
+  /** Which rows the caller was allowed to ask for. */
+  scope: Scope;
   rows: ReportRow[];
   totals: { netTotal: number; marginPct: number | null; count: number };
 };
 
+/**
+ * Reporting is where scope matters more than capability: every internal role can
+ * open this endpoint, and what separates them is which rows come back. A rep is
+ * pinned to their own regardless of what they ask for — the narrowing happens in
+ * the query, not in the route, so a rep cannot widen it with `?repId=`.
+ */
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("reports", "view");
+  if (!authorized.ok) return authorized.response;
 
+  const { actor } = authorized;
   const params = new URL(request.url).searchParams;
+
   const filters: ReportFilters = {
     period: params.get("period"),
-    repId: params.get("repId"),
+    // Own-scoped callers are overwritten, not merely defaulted.
+    repId: actor.scope === "own" ? actor.userId : params.get("repId"),
     status: params.get("status"),
     product: params.get("product"),
   };
 
-  // TODO(A7): translate `filters` into the reporting query and aggregate.
+  // TODO(A7): translate `filters` into the reporting query and aggregate. The
+  // query MUST apply `filters.repId` whenever `actor.scope` is "own" — that is
+  // the only thing keeping a rep out of the rest of the team's numbers here.
   const response: ReportResponse = {
     filters,
+    scope: actor.scope,
     rows: [],
     totals: { netTotal: 0, marginPct: null, count: 0 },
   };

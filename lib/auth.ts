@@ -1,8 +1,20 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import {
+  accessFor,
+  can,
+  canActAtLevel,
+  scopeFor,
+  type Capability,
+  type Module,
+  type Scope,
+} from "@/lib/permissions";
 import type { Role } from "@/types/globals";
 
 /**
- * Role helpers.
+ * Server-side role helpers. Client components use `useRole()` from
+ * `lib/use-role.ts` instead — this module imports `@clerk/nextjs/server`, which
+ * cannot be pulled into a browser bundle.
  *
  * The role lives on the Clerk user as `publicMetadata.role`. It reaches the app
  * two ways:
@@ -19,7 +31,7 @@ import type { Role } from "@/types/globals";
 export const APPROVER_ROLES = ["manager", "finance", "admin"] as const;
 export type ApproverRole = (typeof APPROVER_ROLES)[number];
 
-const ROLES = new Set<string>(["admin", "manager", "finance", "rep"]);
+const ROLES = new Set<string>(["admin", "manager", "finance", "rep", "customer"]);
 
 function asRole(value: unknown): Role | null {
   return typeof value === "string" && ROLES.has(value) ? (value as Role) : null;
@@ -58,10 +70,11 @@ export async function currentRole(): Promise<Role | null> {
  * spends its day on; `/` redirects here.
  */
 export const LANDING_BY_ROLE: Record<Role, string> = {
-  admin: "/backend/products",
+  admin: "/admin",
   manager: "/manager",
   finance: "/finance",
   rep: "/rep",
+  customer: "/portal",
 };
 
 /** Reps have no role set until an admin assigns one, so default to the rep desk. */
@@ -79,6 +92,79 @@ export function isAdmin(role: Role | null): boolean {
 
 /** True when `role` may act on an approval at `level`. Admins may act on any. */
 export function canApproveLevel(role: Role | null, level: string): boolean {
-  if (!isApprover(role)) return false;
-  return role === "admin" || role === level;
+  return canActAtLevel(role, level);
+}
+
+/* ------------------------------------------------------------------ *
+ * API guards
+ * ------------------------------------------------------------------ */
+
+export type AuthorizedActor = {
+  userId: string;
+  role: Role;
+  /** Which rows this actor may touch for the module that was checked. */
+  scope: Scope;
+};
+
+/**
+ * A refusal, ready to return from a route handler. Route code distinguishes it
+ * from success by the presence of `response`, so a guard can never be ignored by
+ * accident — there is no truthy actor to destructure on the failure path.
+ */
+export type AuthorizationFailure = { ok: false; response: NextResponse };
+export type AuthorizationSuccess = { ok: true; actor: AuthorizedActor };
+export type AuthorizationResult = AuthorizationSuccess | AuthorizationFailure;
+
+function deny(status: 401 | 403, error: string): AuthorizationFailure {
+  return { ok: false, response: NextResponse.json({ error }, { status }) };
+}
+
+/**
+ * Authorizes one API action against an explicit list of roles.
+ *
+ * Called per action rather than per file: a route a role may reach is not a
+ * route it may write through, so GET and POST in the same handler pass different
+ * lists. Returns 401 when signed out and 403 when signed in as the wrong role,
+ * because the two need different client behaviour.
+ */
+export async function requireRole(
+  allowed: readonly Role[],
+): Promise<AuthorizationResult> {
+  const { userId, role } = await currentUser();
+
+  if (!userId) return deny(401, "Unauthorized");
+  if (!role) return deny(403, "Your account has no role assigned");
+  if (!allowed.includes(role)) {
+    return deny(403, `A ${role} may not perform this action`);
+  }
+
+  return { ok: true, actor: { userId, role, scope: "all" } };
+}
+
+/**
+ * Authorizes an action against the permission matrix rather than a hand-written
+ * role list, and reports back the row scope the caller must apply.
+ *
+ * Prefer this over `requireRole` wherever the action maps onto a module: the
+ * matrix stays the one place the rules live, and the returned `scope` is the
+ * reminder that "manager" and "rep" may both pass while seeing different rows.
+ */
+export async function requireCapability(
+  module: Module,
+  minimum: Capability = "view",
+): Promise<AuthorizationResult> {
+  const { userId, role } = await currentUser();
+
+  if (!userId) return deny(401, "Unauthorized");
+  if (!role) return deny(403, "Your account has no role assigned");
+
+  if (!can(module, role, minimum)) {
+    const held = accessFor(module, role).capability;
+    return deny(
+      403,
+      `A ${role} has ${held} access here and needs ${minimum}`,
+    );
+  }
+
+  return { ok: true, actor: { userId, role, scope: scopeFor(module, role) } };
 }

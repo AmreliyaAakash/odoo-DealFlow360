@@ -201,6 +201,35 @@ create table if not exists quotation_allocations (
 create index if not exists quotation_allocations_quotation_id_idx
   on quotation_allocations (quotation_id);
 
+-- ============================================================ config audit (A6)
+--
+-- Every change an admin makes to the config tables is written here as one row
+-- per field changed, so the admin dashboard can show "who changed what, from
+-- what, to what". `actor_name` and `entity_label` are snapshots taken at write
+-- time: the log must stay readable after a user is deleted or a product renamed.
+
+create table if not exists config_audit_log (
+  id           uuid primary key default gen_random_uuid(),
+  -- Clerk user ID of whoever made the change.
+  actor_id     text not null,
+  actor_name   text,
+  entity       text not null
+                 check (entity in ('products','discount_rules','warehouses',
+                                   'subscription_plans','users')),
+  entity_id    text,
+  entity_label text,
+  action       text not null check (action in ('create','update','delete')),
+  -- Null on create/delete, where the whole row is the change.
+  field        text,
+  old_value    text,
+  new_value    text,
+  created_at   timestamptz not null default now()
+);
+
+-- The dashboard only ever reads the newest rows.
+create index if not exists config_audit_log_created_at_idx
+  on config_audit_log (created_at desc);
+
 -- ============================================================ seed idempotency
 --
 -- The seed uses bare `on conflict do nothing`, which only fires on an actual
@@ -225,32 +254,89 @@ create unique index if not exists subscription_plans_name_key
 create unique index if not exists customers_name_key
   on customers (name);
 
+-- ============================================================ upsell rules (B5)
+
+create table if not exists upsell_rules (
+  id                 uuid primary key default gen_random_uuid(),
+  name               text not null,
+  -- The product that triggers the suggestion, and the one suggested alongside.
+  trigger_product_id uuid references products(id) on delete cascade,
+  trigger_category   text,
+  suggested_product_id uuid not null references products(id) on delete cascade,
+  -- Ordering hint when several rules fire for the same line.
+  priority           int not null default 100,
+  active             boolean not null default true,
+  created_at         timestamptz not null default now()
+);
+
+create index if not exists upsell_rules_trigger_product_idx
+  on upsell_rules (trigger_product_id);
+
+delete from upsell_rules a
+  using upsell_rules b
+  where a.name = b.name and a.ctid > b.ctid;
+
+create unique index if not exists upsell_rules_name_key on upsell_rules (name);
+
 -- ============================================================ RLS
+--
+-- The database is the last line, not the first. The route guard decides who may
+-- load a URL and the API guards decide who may call an action; these policies
+-- assume both have been bypassed — a browser talking straight to PostgREST with
+-- a valid Clerk token — and still hold.
+--
+-- Note on the role claim: `clerk_role()` reads `publicMetadata.role`, NOT the
+-- top-level `role` claim. In Clerk's native Supabase integration the top-level
+-- `role` is the Postgres role ("authenticated") that Supabase maps the request
+-- onto; the application role travels in publicMetadata. Comparing against
+-- `auth.jwt() ->> 'role'` would compare every user against "authenticated" and
+-- match nobody.
 
 alter table products              enable row level security;
 alter table discount_rules        enable row level security;
 alter table warehouses            enable row level security;
 alter table warehouse_stock       enable row level security;
 alter table subscription_plans    enable row level security;
+alter table upsell_rules          enable row level security;
 alter table customers             enable row level security;
 alter table quotations            enable row level security;
 alter table quotation_lines       enable row level security;
 alter table approvals             enable row level security;
 alter table negotiation_messages  enable row level security;
 alter table quotation_allocations enable row level security;
+alter table config_audit_log      enable row level security;
 
--- Config tables: any signed-in staff member reads; only admins write (A2-A5).
+-- ------------------------------------------------------------ config tables
+--
+-- Every staff role reads the catalog; who may write it differs per table, and
+-- follows the permission matrix:
+--   products, discount_rules, upsell_rules  → admin only
+--   warehouses, warehouse_stock, subscription_plans → admin and finance
+--
+-- A customer reads none of it: `is_staff()` excludes them, so the portal cannot
+-- enumerate the price list.
+
 do $$
 declare t text;
 begin
   foreach t in array array['products','discount_rules','warehouses',
-                           'warehouse_stock','subscription_plans']
+                           'warehouse_stock','subscription_plans','upsell_rules']
   loop
     execute format($f$
       drop policy if exists %1$I_staff_read on %1$I;
       create policy %1$I_staff_read on %1$I
         for select using (is_staff());
+    $f$, t);
+  end loop;
+end $$;
 
+-- Admin-only writes.
+do $$
+declare t text;
+begin
+  foreach t in array array['products','discount_rules','upsell_rules']
+  loop
+    execute format($f$
       drop policy if exists %1$I_admin_write on %1$I;
       create policy %1$I_admin_write on %1$I
         for all using (is_admin()) with check (is_admin());
@@ -258,16 +344,54 @@ begin
   end loop;
 end $$;
 
--- Customers: staff see all; a portal user sees only their own row.
+-- Finance owns warehouse setup and subscription plans alongside the admin.
+do $$
+declare t text;
+begin
+  foreach t in array array['warehouses','warehouse_stock','subscription_plans']
+  loop
+    execute format($f$
+      drop policy if exists %1$I_admin_write on %1$I;
+      drop policy if exists %1$I_finance_write on %1$I;
+      create policy %1$I_finance_write on %1$I
+        for all
+        using (clerk_role() in ('admin','finance'))
+        with check (clerk_role() in ('admin','finance'));
+    $f$, t);
+  end loop;
+end $$;
+
+-- A portal customer is not staff, so the policy above hides the catalog from
+-- them — including through the embedded join the portal uses to name the lines
+-- on their own quotation, which would otherwise render as "Item". This opens up
+-- exactly the products that appear on a quotation they can already read, and
+-- nothing else: `quotations` is itself filtered to their own rows.
+drop policy if exists products_customer_read on products;
+create policy products_customer_read on products
+  for select using (
+    clerk_role() = 'customer'
+    and id in (
+      select l.product_id from quotation_lines l
+      where l.quotation_id in (select id from quotations)
+    )
+  );
+
+-- ------------------------------------------------------------ customers
+
+-- Staff see every customer; a portal user sees only their own row.
 drop policy if exists customers_read on customers;
 create policy customers_read on customers
   for select using (is_staff() or portal_user_id = clerk_user_id());
 
+-- A customer never edits their own record — the link to a Clerk user is what
+-- the portal's whole access model rests on.
 drop policy if exists customers_staff_write on customers;
 create policy customers_staff_write on customers
   for all using (is_staff()) with check (is_staff());
 
--- Quotations: the owning rep, any approver, or the customer on the portal.
+-- ------------------------------------------------------------ quotations
+
+-- The owning rep, any approver, or the customer the quote was raised for.
 drop policy if exists quotations_read on quotations;
 create policy quotations_read on quotations
   for select using (
@@ -278,28 +402,146 @@ create policy quotations_read on quotations
     )
   );
 
+-- Writes are narrower than reads: a rep may only ever write their own rows, and
+-- an approver may not write one at all. Approvers change a quotation's status
+-- through the approvals table, not by editing it directly.
 drop policy if exists quotations_rep_write on quotations;
-create policy quotations_rep_write on quotations
-  for all
-  using (rep_id = clerk_user_id() or clerk_role() in ('manager','finance','admin'))
-  with check (rep_id = clerk_user_id() or clerk_role() in ('manager','finance','admin'));
+drop policy if exists quotations_insert on quotations;
+create policy quotations_insert on quotations
+  for insert
+  with check (
+    (clerk_role() = 'rep' and rep_id = clerk_user_id())
+    or is_admin()
+  );
 
--- Child rows inherit their parent quotation's visibility.
-do $$
-declare t text;
-begin
-  foreach t in array array['quotation_lines','approvals',
-                           'negotiation_messages','quotation_allocations']
-  loop
-    execute format($f$
-      drop policy if exists %1$I_via_quotation on %1$I;
-      create policy %1$I_via_quotation on %1$I
-        for all
-        using (quotation_id in (select id from quotations))
-        with check (quotation_id in (select id from quotations));
-    $f$, t);
-  end loop;
-end $$;
+drop policy if exists quotations_update on quotations;
+create policy quotations_update on quotations
+  for update
+  using (
+    (clerk_role() = 'rep' and rep_id = clerk_user_id())
+    or clerk_role() in ('manager','finance','admin')
+  )
+  with check (
+    (clerk_role() = 'rep' and rep_id = clerk_user_id())
+    or clerk_role() in ('manager','finance','admin')
+  );
+
+drop policy if exists quotations_delete on quotations;
+create policy quotations_delete on quotations
+  for delete
+  using ((clerk_role() = 'rep' and rep_id = clerk_user_id()) or is_admin());
+
+-- ------------------------------------------------------------ quotation lines
+
+-- Readable by anyone who can read the parent quotation; writable only by the
+-- rep who owns it and the admin, matching the builder's matrix row.
+drop policy if exists quotation_lines_via_quotation on quotation_lines;
+drop policy if exists quotation_lines_read on quotation_lines;
+create policy quotation_lines_read on quotation_lines
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists quotation_lines_write on quotation_lines;
+create policy quotation_lines_write on quotation_lines
+  for all
+  using (
+    is_admin()
+    or quotation_id in (select id from quotations where rep_id = clerk_user_id())
+  )
+  with check (
+    is_admin()
+    or quotation_id in (select id from quotations where rep_id = clerk_user_id())
+  );
+
+-- ------------------------------------------------------------ approvals
+--
+-- The important one. Reading a decision is open to anyone who can read the
+-- quotation, but recording one is restricted to the approver roles — without
+-- this split a rep could insert an `approve` row against their own deal and
+-- walk it straight past the desk.
+
+drop policy if exists approvals_via_quotation on approvals;
+drop policy if exists approvals_read on approvals;
+create policy approvals_read on approvals
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists approvals_insert on approvals;
+create policy approvals_insert on approvals
+  for insert
+  with check (
+    clerk_role() in ('manager','finance','admin')
+    -- A manager may only record a manager-level decision, finance a finance-level
+    -- one. Admins may record any tier.
+    and (is_admin() or level = clerk_role())
+    -- Decisions are attributed to whoever made them.
+    and decided_by = clerk_user_id()
+    and quotation_id in (select id from quotations)
+  );
+
+-- Deliberately no update or delete policy: an approval is an audit record.
+
+-- ------------------------------------------------------------ negotiation
+
+-- The portal thread. The customer the quote belongs to, and staff answering
+-- them; an approver has no business posting into it.
+drop policy if exists negotiation_messages_via_quotation on negotiation_messages;
+drop policy if exists negotiation_messages_read on negotiation_messages;
+create policy negotiation_messages_read on negotiation_messages
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists negotiation_messages_insert on negotiation_messages;
+create policy negotiation_messages_insert on negotiation_messages
+  for insert
+  with check (
+    author_id = clerk_user_id()
+    and quotation_id in (select id from quotations)
+    and (
+      -- The rep who owns the quotation, writing as staff.
+      (author_kind = 'rep'
+        and quotation_id in (select id from quotations where rep_id = clerk_user_id()))
+      -- The customer it was raised for, writing as themselves.
+      or (author_kind = 'customer'
+        and clerk_role() = 'customer'
+        and quotation_id in (
+          select id from quotations
+          where customer_id in (
+            select id from customers where portal_user_id = clerk_user_id()
+          )
+        ))
+    )
+  );
+
+-- ------------------------------------------------------------ allocations
+
+-- Warehouse split: the rep may override the suggestion on their own quote,
+-- finance manages allocation everywhere, and everyone else only looks.
+drop policy if exists quotation_allocations_via_quotation on quotation_allocations;
+drop policy if exists quotation_allocations_read on quotation_allocations;
+create policy quotation_allocations_read on quotation_allocations
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists quotation_allocations_write on quotation_allocations;
+create policy quotation_allocations_write on quotation_allocations
+  for all
+  using (
+    clerk_role() in ('finance','admin')
+    or quotation_id in (select id from quotations where rep_id = clerk_user_id())
+  )
+  with check (
+    clerk_role() in ('finance','admin')
+    or quotation_id in (select id from quotations where rep_id = clerk_user_id())
+  );
+
+-- ------------------------------------------------------------ audit log
+
+-- Any staff member may read the history; only admins append to it, and nobody
+-- edits or deletes a written entry.
+drop policy if exists config_audit_log_staff_read on config_audit_log;
+create policy config_audit_log_staff_read on config_audit_log
+  for select using (is_staff());
+
+drop policy if exists config_audit_log_admin_insert on config_audit_log;
+create policy config_audit_log_admin_insert on config_audit_log
+  for insert with check (is_admin() and actor_id = clerk_user_id());
 
 -- Realtime for the deal-health dashboard (B9). Guarded: re-adding a table to a
 -- publication raises 42710, so check the catalog first.
@@ -312,5 +554,18 @@ begin
       and tablename = 'quotations'
   ) then
     alter publication supabase_realtime add table quotations;
+  end if;
+end $$;
+
+-- The admin dashboard's audit feed subscribes to inserts on this table.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'config_audit_log'
+  ) then
+    alter publication supabase_realtime add table config_audit_log;
   end if;
 end $$;

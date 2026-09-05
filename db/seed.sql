@@ -68,3 +68,28 @@ insert into customers (name, email, portal_user_id) values
   ('Northwind Logistics', 'ops@northwind.example', null),
   ('Helios Manufacturing', 'it@helios.example',    null)
 on conflict do nothing;
+
+-- ============================================================ upsell rules
+
+-- Suggest the support subscription alongside the hardware it protects, and the
+-- higher tier alongside the bigger box.
+insert into upsell_rules (name, trigger_category, suggested_product_id, priority)
+select 'Servers → Support Standard', 'Servers', p.id, 10
+from products p where p.sku = 'SUB-STD'
+on conflict (name) do nothing;
+
+insert into upsell_rules (name, trigger_category, suggested_product_id, priority)
+select 'Networking → Monitoring Suite', 'Networking', p.id, 20
+from products p where p.sku = 'SUB-MON'
+on conflict (name) do nothing;
+
+insert into upsell_rules (name, trigger_product_id, suggested_product_id, priority)
+select 'R650 → Support Premium', t.id, s.id, 5
+from products t, products s
+where t.sku = 'SRV-R650' and s.sku = 'SUB-PRM'
+on conflict (name) do nothing;
+
+insert into upsell_rules (name, trigger_category, suggested_product_id, priority)
+select 'Storage → Install & Commissioning', 'Storage', p.id, 30
+from products p where p.sku = 'SVC-INST'
+on conflict (name) do nothing;

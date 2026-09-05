@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currentUser } from "@/lib/auth";
+import { requireCapability } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 /**
@@ -8,6 +8,10 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
  *
  * Editing lines and submitting for approval live on
  * `PATCH /api/quotations/[id]`.
+ *
+ * The two verbs are authorized separately: an approver may read every quotation
+ * but may not raise one, because the matrix gives them review-only access to the
+ * builder.
  */
 
 export type QuotationListRow = {
@@ -21,11 +25,10 @@ export type QuotationListRow = {
 };
 
 export async function GET(request: Request) {
-  const { userId } = await currentUser();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("quotationBuilder", "view");
+  if (!authorized.ok) return authorized.response;
 
+  const { actor } = authorized;
   const params = new URL(request.url).searchParams;
   const supabase = createServerSupabaseClient();
 
@@ -34,8 +37,14 @@ export async function GET(request: Request) {
     .select("id, reference, status, rep_id, net_total, updated_at, customers(id, name)")
     .order("updated_at", { ascending: false });
 
-  const repId = params.get("repId");
-  if (repId) query = query.eq("rep_id", repId);
+  // A rep sees only their own pipeline, whatever they ask for. The filter is
+  // applied before the caller's, so `?repId=` cannot widen it.
+  if (actor.scope === "own") {
+    query = query.eq("rep_id", actor.userId);
+  } else {
+    const repId = params.get("repId");
+    if (repId) query = query.eq("rep_id", repId);
+  }
 
   const status = params.get("status");
   if (status) query = query.eq("status", status);
@@ -46,14 +55,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ quotations: data ?? [] });
+  return NextResponse.json({ quotations: data ?? [], scope: actor.scope });
 }
 
 export async function POST(request: Request) {
-  const { userId } = await currentUser();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Creating a quotation is a write: reps and admins only, never an approver.
+  const authorized = await requireCapability("quotationBuilder", "write");
+  if (!authorized.ok) return authorized.response;
+
+  const { actor } = authorized;
 
   let payload: { customerId?: unknown; reference?: unknown };
   try {
@@ -75,7 +85,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("quotations")
     .insert({
-      rep_id: userId,
+      rep_id: actor.userId,
       customer_id: customerId ?? null,
       reference: reference ?? null,
       status: "draft",

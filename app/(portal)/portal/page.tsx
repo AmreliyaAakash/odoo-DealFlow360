@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { portalIdentity } from "./guard";
 
 /**
  * Portal entry point. Signed-out visitors get an email-link-only sign-in; signed-in
@@ -32,26 +33,28 @@ export default async function PortalPage() {
     );
   }
 
+  // Resolves the Clerk user to their customer row, and refuses anyone who is
+  // not a portal customer.
+  const access = await portalIdentity();
+
+  if (!access.ok) {
+    return (
+      <PortalNotice
+        title={
+          access.reason === "notCustomer"
+            ? "This account is not a portal account"
+            : "No portal account linked"
+        }
+      />
+    );
+  }
+
   const supabase = createServerSupabaseClient();
-
-  const { data: customer, error: customerError } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("portal_user_id", userId)
-    .maybeSingle();
-
-  if (customerError) {
-    throw new Error(`Failed to load customer: ${customerError.message}`);
-  }
-
-  if (!customer) {
-    return <PortalNotice title="No portal account linked" />;
-  }
 
   const { data: quotation, error: quotationError } = await supabase
     .from("quotations")
     .select("id")
-    .eq("customer_id", customer.id)
+    .eq("customer_id", access.identity.customerId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

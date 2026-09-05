@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/auth";
 import type { RequiredApproval } from "@/lib/business-logic";
 import {
   LINES_SHAPE_ERROR,
@@ -28,10 +28,8 @@ const EDITABLE_STATUSES = new Set(["draft", "returned", null]);
 const EDITABLE_FIELDS = ["reference", "notes", "valid_until"] as const;
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/quotations/[id]">) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authorized = await requireCapability("quotationBuilder", "view");
+  if (!authorized.ok) return authorized.response;
 
   const { id } = await ctx.params;
   const supabase = createServerSupabaseClient();
@@ -56,11 +54,12 @@ export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/quotations/[id]">,
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Editing is a write, so an approver reviewing the quote is refused here even
+  // though they may read it through GET.
+  const authorized = await requireCapability("quotationBuilder", "write");
+  if (!authorized.ok) return authorized.response;
 
+  const { actor } = authorized;
   const { id } = await ctx.params;
 
   let payload: Record<string, unknown>;
@@ -74,9 +73,9 @@ export async function PATCH(
 
   const { data: existing, error: loadError } = await supabase
     .from("quotations")
-    .select("id, status")
+    .select("id, status, rep_id")
     .eq("id", id)
-    .maybeSingle<{ id: string; status: string | null }>();
+    .maybeSingle<{ id: string; status: string | null; rep_id: string }>();
 
   if (loadError) {
     return NextResponse.json({ error: loadError.message }, { status: 500 });
@@ -84,6 +83,16 @@ export async function PATCH(
   if (!existing) {
     return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
   }
+
+  // A rep edits their own quotations and no one else’s. RLS enforces this too;
+  // checking here turns a silent empty update into an honest 403.
+  if (actor.scope === "own" && existing.rep_id !== actor.userId) {
+    return NextResponse.json(
+      { error: "This quotation belongs to another rep" },
+      { status: 403 },
+    );
+  }
+
   if (!EDITABLE_STATUSES.has(existing.status)) {
     return NextResponse.json(
       { error: `A quotation with status "${existing.status}" can no longer be edited` },
@@ -152,7 +161,7 @@ export async function PATCH(
     }
 
     update.status = requiredApprovals.length > 0 ? "pending_approval" : "approved";
-    update.submitted_by = userId;
+    update.submitted_by = actor.userId;
     update.submitted_at = new Date().toISOString();
   }
 

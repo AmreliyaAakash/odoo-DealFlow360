@@ -7,8 +7,9 @@ import {
   ArrowsClockwiseIcon,
   ChartBarIcon,
   ChartLineUpIcon,
-  GearIcon,
   HeartbeatIcon,
+  PackageIcon,
+  PercentIcon,
   ReceiptIcon,
   SealCheckIcon,
   SparkleIcon,
@@ -17,6 +18,7 @@ import {
   UsersThreeIcon,
   WarehouseIcon,
 } from "@phosphor-icons/react";
+import { canView, type Module } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/quotations";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/globals";
@@ -28,40 +30,120 @@ type Item = {
   icon: typeof SquaresFourIcon;
   /** Also mark active for sub-routes of this href. */
   prefix?: string;
+  /**
+   * The module this item opens. Items whose module the role cannot view are not
+   * rendered — the same matrix the API enforces decides what appears here.
+   */
+  module?: Module;
 };
 
 const REP_NAV: Item[] = [
   { href: "/rep", label: "Dashboard", icon: SquaresFourIcon },
-  { href: "/quotations", label: "My Quotations", icon: ReceiptIcon },
-  { href: "/rep/upsell", label: "Upsell Suggestions", icon: SparkleIcon },
-  { href: "/deal-health", label: "Deal Health", icon: HeartbeatIcon },
+  {
+    href: "/quotations",
+    label: "My Quotations",
+    icon: ReceiptIcon,
+    module: "quotationBuilder",
+  },
+  {
+    href: "/rep/upsell",
+    label: "Upsell Suggestions",
+    icon: SparkleIcon,
+    module: "upsellPanel",
+  },
+  {
+    href: "/deal-health",
+    label: "Deal Health",
+    icon: HeartbeatIcon,
+    module: "dealHealth",
+  },
 ];
 
 const APPROVER_NAV: Item[] = [
   { href: "/manager", label: "Dashboard", icon: SquaresFourIcon },
-  { href: "/approvals", label: "Pending Approvals", icon: SealCheckIcon },
+  {
+    href: "/approvals",
+    label: "Pending Approvals",
+    icon: SealCheckIcon,
+    module: "approvals",
+  },
   { href: "/manager/pipeline", label: "Team Pipeline", icon: UsersThreeIcon },
-  { href: "/deal-health", label: "Deal Health & Anomalies", icon: HeartbeatIcon },
+  {
+    href: "/deal-health",
+    label: "Deal Health & Anomalies",
+    icon: HeartbeatIcon,
+    module: "dealHealth",
+  },
 ];
 
 const FINANCE_NAV: Item[] = [
   { href: "/finance", label: "Dashboard", icon: SquaresFourIcon },
-  { href: "/approvals", label: "Finance Approvals", icon: SealCheckIcon },
-  { href: "/finance/fulfillment", label: "Fulfillment", icon: TruckIcon },
+  {
+    href: "/approvals",
+    label: "Finance Approvals",
+    icon: SealCheckIcon,
+    module: "approvals",
+  },
+  {
+    href: "/finance/fulfillment",
+    label: "Fulfillment",
+    icon: TruckIcon,
+    module: "warehouseSplit",
+  },
   {
     href: "/finance/billing",
     label: "Subscriptions & Billing",
     icon: ArrowsClockwiseIcon,
+    module: "billing",
   },
-  { href: "/finance/warehouses", label: "Warehouses", icon: WarehouseIcon },
+  {
+    href: "/finance/warehouses",
+    label: "Warehouses",
+    icon: WarehouseIcon,
+    module: "warehouses",
+  },
 ];
 
-const REPORTS: Item = { href: "/reports", label: "Reports", icon: ChartBarIcon };
-const BACKEND: Item = {
-  href: "/backend/products",
-  label: "Backend",
-  icon: GearIcon,
-  prefix: "/backend",
+const ADMIN_NAV: Item[] = [
+  { href: "/admin", label: "Dashboard", icon: SquaresFourIcon },
+  {
+    href: "/backend/products",
+    label: "Products",
+    icon: PackageIcon,
+    module: "products",
+  },
+  {
+    href: "/backend/discount-rules",
+    label: "Discount Rules",
+    icon: PercentIcon,
+    module: "discountRules",
+  },
+  {
+    href: "/backend/warehouses",
+    label: "Warehouses",
+    icon: WarehouseIcon,
+    module: "warehouses",
+  },
+  {
+    href: "/backend/subscriptions",
+    label: "Subscription Plans",
+    icon: ArrowsClockwiseIcon,
+    module: "subscriptionPlans",
+  },
+  {
+    href: "/backend/upsell-rules",
+    label: "Upsell Rules",
+    icon: SparkleIcon,
+    module: "upsellRules",
+  },
+  { href: "/admin/users", label: "Users & Roles", icon: UsersThreeIcon },
+];
+
+const REPORTS: Item = {
+  href: "/reports",
+  label: "Reports",
+  icon: ChartBarIcon,
+  module: "reports",
 };
 
 /** Human-readable role names for the profile row. */
@@ -74,9 +156,9 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 /**
- * One workspace per role family: the rep desk (indigo), the approver desk
- * (amber) and the finance desk (emerald). Accent classes are whole strings so
- * Tailwind's scanner can see them.
+ * One workspace per role: the rep desk (indigo), the approver desk (amber), the
+ * finance desk (emerald) and the admin desk (violet). Accent classes are whole
+ * strings so Tailwind's scanner can see them.
  */
 const WORKSPACES = {
   rep: {
@@ -122,11 +204,26 @@ const WORKSPACES = {
     active: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
     button: "bg-emerald-500 hover:bg-emerald-400",
   },
+  admin: {
+    nav: ADMIN_NAV,
+    home: "/admin",
+    showPipeline: false,
+    cta: {
+      href: "/backend/products",
+      title: "Keep the catalog honest",
+      body: "Prices and discount tiers drive every approval.",
+      label: "Open config",
+    },
+    logo: "bg-violet-500",
+    active: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+    button: "bg-violet-500 hover:bg-violet-400",
+  },
 } as const;
 
 function workspaceFor(role: Role | null) {
+  if (role === "admin") return WORKSPACES.admin;
   if (role === "finance") return WORKSPACES.finance;
-  if (role === "manager" || role === "admin") return WORKSPACES.manager;
+  if (role === "manager") return WORKSPACES.manager;
   return WORKSPACES.rep;
 }
 
@@ -142,13 +239,18 @@ export function DashboardSidebar({
   watchlist: WatchlistDeal[];
 }) {
   const pathname = usePathname();
+
+  // A customer has no internal workspace at all. The route guard keeps them out
+  // of /(dashboard), so this only matters if that ever loosens.
+  if (role === "customer") return null;
+
   const workspace = workspaceFor(role);
 
-  const items = [
-    ...workspace.nav,
-    REPORTS,
-    ...(role === "admin" ? [BACKEND] : []),
-  ];
+  // Items are filtered by the same matrix the API enforces, so a role never sees
+  // a link to something it would be refused at.
+  const items = [...workspace.nav, REPORTS].filter(
+    (item) => item.module === undefined || canView(item.module, role),
+  );
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col self-start rounded-xl bg-card p-3 ring-1 ring-foreground/10 lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)]">

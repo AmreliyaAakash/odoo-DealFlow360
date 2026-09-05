@@ -340,3 +340,82 @@ export function isStalled(_quotation: DealHealthQuotation): boolean {
 export function isDiscountAnomaly(_quotation: DealHealthQuotation): boolean {
   return false;
 }
+
+/* ------------------------------------------------------------------ *
+ * Customer portal progress (B8)
+ * ------------------------------------------------------------------ */
+
+/**
+ * What the customer sees on the portal stepper. Deliberately not the internal
+ * `quotations.status` vocabulary: a customer has no business seeing "pending
+ * approval" or knowing which desk a deal is sitting on.
+ */
+export const PORTAL_STAGES = [
+  "sent",
+  "negotiation",
+  "confirmed",
+  "fulfilling",
+  "billed",
+] as const;
+
+export type PortalStage = (typeof PORTAL_STAGES)[number];
+
+export const PORTAL_STAGE_LABELS: Record<PortalStage, string> = {
+  sent: "Sent",
+  negotiation: "Under Negotiation",
+  confirmed: "Confirmed",
+  fulfilling: "Fulfilling",
+  billed: "Billed",
+};
+
+export type PortalProgress = {
+  status: string | null;
+  /** Messages exchanged on the quotation. */
+  messageCount: number;
+  /** Units the customer ordered across every line. */
+  orderedUnits: number;
+  /** Units a warehouse has been committed to. */
+  allocatedUnits: number;
+  /** First billing date across the recurring lines, if any. */
+  firstBillDate: Date | null;
+};
+
+/**
+ * Where a quotation sits on the customer's stepper.
+ *
+ * Fulfilment and billing are read from real allocation and billing data rather
+ * than a status column, because neither has one — a deal is "fulfilling" once
+ * stock is committed to it, and "billed" once that is complete and its first
+ * bill date has passed. Until the allocation engine (B6) lands, no quotation
+ * reaches those two stages, which is the honest answer rather than a fake one.
+ */
+export function portalStage(progress: PortalProgress, now = new Date()): PortalStage {
+  const { status, messageCount, orderedUnits, allocatedUnits, firstBillDate } =
+    progress;
+
+  if (status === "won") {
+    const fullyAllocated = orderedUnits > 0 && allocatedUnits >= orderedUnits;
+
+    if (fullyAllocated && firstBillDate !== null && firstBillDate <= now) {
+      return "billed";
+    }
+    if (allocatedUnits > 0) return "fulfilling";
+    return "confirmed";
+  }
+
+  // A returned quote is one the desk sent back for rework, which from the
+  // customer's side is the same conversation as an open negotiation.
+  if (status === "returned" || messageCount > 0) return "negotiation";
+
+  return "sent";
+}
+
+/** Terminal statuses: the stepper stops and the customer is told plainly. */
+export function isQuoteClosedLost(status: string | null): boolean {
+  return status === "rejected" || status === "lost";
+}
+
+/** A draft has not been sent, so it must never render as a customer's quote. */
+export function isQuoteVisibleToCustomer(status: string | null): boolean {
+  return status !== null && status !== "draft";
+}
