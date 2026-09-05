@@ -71,9 +71,80 @@ export function requiredLevels(summary: QuotationSummary): ApprovalLevel[] {
  * Risk scoring
  * ------------------------------------------------------------------ */
 
-// STUB(B4): agree the weighting before relying on this score.
-export function riskScore(_summary: QuotationSummary): number {
-  return 0;
+/**
+ * Blended risk, 0–100. Three signals, each normalised to 0–1 and capped, then
+ * weighted. Discount depth dominates because it is the lever a rep controls;
+ * margin erosion is the consequence the desk cares about; deal size scales the
+ * cost of being wrong.
+ */
+export const RISK_WEIGHTS = {
+  discount: 0.45,
+  margin: 0.35,
+  value: 0.2,
+} as const;
+
+/** Discount at or above this is full risk on that axis. */
+export const RISK_DISCOUNT_CEILING = 40;
+/** Margin at or below this is full risk; at or above MARGIN_SAFE it is zero. */
+export const RISK_MARGIN_FLOOR = 0.05;
+export const RISK_MARGIN_SAFE = 0.3;
+/** Deal value at or above this is full risk on that axis (₹1 crore). */
+export const RISK_VALUE_CEILING = 1_00_00_000;
+
+/** Bands used for the green / amber / red treatment in the UI. */
+export const RISK_BANDS = { amber: 40, red: 70 } as const;
+
+export type RiskBand = "low" | "medium" | "high";
+
+export function riskBand(score: number): RiskBand {
+  if (score >= RISK_BANDS.red) return "high";
+  if (score >= RISK_BANDS.amber) return "medium";
+  return "low";
+}
+
+const unit = (value: number) => Math.min(Math.max(value, 0), 1);
+
+export function riskScore(summary: QuotationSummary): number {
+  const discount = unit(summary.maxDiscountPct / RISK_DISCOUNT_CEILING);
+
+  // No revenue means no margin signal rather than infinite risk.
+  const margin =
+    summary.marginPct === null
+      ? 0
+      : unit(
+          (RISK_MARGIN_SAFE - summary.marginPct) /
+            (RISK_MARGIN_SAFE - RISK_MARGIN_FLOOR),
+        );
+
+  const value = unit(summary.net / RISK_VALUE_CEILING);
+
+  const blended =
+    RISK_WEIGHTS.discount * discount +
+    RISK_WEIGHTS.margin * margin +
+    RISK_WEIGHTS.value * value;
+
+  return Math.round(blended * 100);
+}
+
+/**
+ * Risk from stored quotation columns, for rows that were priced earlier and do
+ * not need re-summarising.
+ */
+export function riskScoreFromTotals(totals: {
+  maxDiscountPct: number;
+  net: number;
+  margin: number;
+}): number {
+  return riskScore({
+    gross: 0,
+    discount: 0,
+    net: totals.net,
+    cost: 0,
+    margin: totals.margin,
+    marginPct: totals.net === 0 ? null : totals.margin / totals.net,
+    maxDiscountPct: totals.maxDiscountPct,
+    lineCount: 0,
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -123,6 +194,8 @@ export type BillingLine = {
   cadence: BillingCadence;
   qty: number;
   unitPrice: number;
+  /** When the subscription started; billing dates step from here. */
+  anchor?: string | Date | null;
 };
 
 export type ProrationInput = {
@@ -145,14 +218,96 @@ export function isRecurring(line: BillingLine): boolean {
   return line.cadence !== "one_time";
 }
 
-// STUB(B7): day vs. second granularity, downgrade credits, rounding.
-export function calculateProration(_input: ProrationInput): ProrationResult {
-  return { amount: 0, remainingFraction: 0 };
+/** Months in one billing period, per cadence. `one_time` never recurs. */
+export const CADENCE_MONTHS: Record<BillingCadence, number> = {
+  one_time: 0,
+  monthly: 1,
+  quarterly: 3,
+  annual: 12,
+};
+
+/**
+ * A recurring line's value normalised to one month, so cadences can be summed
+ * into a single MRR figure.
+ */
+export function monthlyValue(line: BillingLine): number {
+  const months = CADENCE_MONTHS[line.cadence];
+  return months === 0 ? 0 : (line.unitPrice * line.qty) / months;
 }
 
-// STUB(B7): derive from the subscription anchor date and cadence.
-export function nextBillingDate(_line: BillingLine, _from: Date): Date | null {
-  return null;
+/**
+ * Proration on a mid-cycle quantity change, by whole days remaining.
+ *
+ * Day granularity (not seconds) because invoices are dated, and a customer who
+ * changes at 09:00 should not be billed differently from one who changes at
+ * 17:00 the same day. The day of the change counts as remaining — the customer
+ * has the new quantity for all of it.
+ *
+ * Returns a positive amount to charge on an upgrade, negative to credit on a
+ * downgrade.
+ */
+export function calculateProration(input: ProrationInput): ProrationResult {
+  const { unitPrice, previousQty, nextQty, periodStart, periodEnd, changedAt } =
+    input;
+
+  const totalDays = daysBetween(periodStart, periodEnd);
+  if (totalDays <= 0) return { amount: 0, remainingFraction: 0 };
+
+  // Clamp so a change logged outside the period cannot produce a nonsense share.
+  const elapsed = Math.min(Math.max(daysBetween(periodStart, changedAt), 0), totalDays);
+  const remainingFraction = (totalDays - elapsed) / totalDays;
+
+  const delta = nextQty - previousQty;
+  const amount = round2(delta * unitPrice * remainingFraction);
+
+  return { amount, remainingFraction };
+}
+
+/**
+ * The next date this line bills, stepping from its anchor by whole cadence
+ * periods until it lands after `from`. Returns `null` for one-time lines.
+ *
+ * Day-of-month is clamped, so a subscription anchored on the 31st bills on the
+ * 28th/30th in shorter months rather than rolling into the next one.
+ */
+export function nextBillingDate(line: BillingLine, from: Date): Date | null {
+  const months = CADENCE_MONTHS[line.cadence];
+  if (months === 0) return null;
+
+  const anchor = line.anchor ? new Date(line.anchor) : new Date(from);
+  if (Number.isNaN(anchor.getTime())) return null;
+
+  const anchorDay = anchor.getDate();
+  const next = startOfDay(anchor);
+  const target = startOfDay(from);
+
+  // Step whole periods until we are strictly past `from`.
+  let guard = 0;
+  while (next <= target && guard < 480) {
+    next.setMonth(next.getMonth() + months, 1);
+    next.setDate(Math.min(anchorDay, daysInMonth(next)));
+    guard += 1;
+  }
+
+  return next;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysInMonth(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function daysBetween(from: Date, to: Date): number {
+  return Math.round(
+    (startOfDay(to).getTime() - startOfDay(from).getTime()) / 86_400_000,
+  );
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /* ------------------------------------------------------------------ *

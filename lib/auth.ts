@@ -59,8 +59,8 @@ export async function currentRole(): Promise<Role | null> {
  */
 export const LANDING_BY_ROLE: Record<Role, string> = {
   admin: "/backend/products",
-  manager: "/approvals",
-  finance: "/approvals",
+  manager: "/manager",
+  finance: "/finance",
   rep: "/rep",
 };
 

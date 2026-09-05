@@ -1,7 +1,11 @@
 -- ============================================================================
 -- DealFlow360 — complete setup. Paste into Supabase → SQL Editor → Run.
 -- Idempotent: every statement is guarded, so re-running is safe.
+--
+-- GENERATED FILE — do not edit. Source: schema.sql + seed.sql + demo.sql
+-- Rebuild with: npm run db:build
 -- ============================================================================
+
 
 -- DealFlow360 schema (Clerk-compatible RLS)
 --
@@ -320,25 +324,24 @@ begin
   end if;
 end $$;
 
-
 -- DealFlow360 seed data: discount tiers, warehouses, products, subscription plans.
 -- Safe to re-run: every insert is keyed on a natural unique column.
 
 -- ============================================================ products
 
 insert into products (name, sku, category, list_price, cost, cadence) values
-  ('Rack Server R450',        'SRV-R450',  'Servers',     8400.00, 6100.00, 'one_time'),
-  ('Rack Server R650',        'SRV-R650',  'Servers',    13900.00, 9800.00, 'one_time'),
-  ('Edge Node E20',           'SRV-E20',   'Servers',     3200.00, 2350.00, 'one_time'),
-  ('Core Switch 48P',         'NET-SW48',  'Networking',  4600.00, 3150.00, 'one_time'),
-  ('Access Switch 24P',       'NET-SW24',  'Networking',  1850.00, 1240.00, 'one_time'),
-  ('Firewall FG-200',         'NET-FW200', 'Networking',  5200.00, 3600.00, 'one_time'),
-  ('NVMe Array 24TB',         'STO-N24',   'Storage',     9750.00, 7200.00, 'one_time'),
-  ('Backup Vault 100TB',      'STO-B100',  'Storage',    12400.00, 9100.00, 'one_time'),
-  ('Install & Commissioning', 'SVC-INST',  'Services',    2400.00, 1500.00, 'one_time'),
-  ('Support Plan Standard',   'SUB-STD',   'Support',      180.00,   70.00, 'monthly'),
-  ('Support Plan Premium',    'SUB-PRM',   'Support',      420.00,  165.00, 'monthly'),
-  ('Monitoring Suite',        'SUB-MON',   'Support',      260.00,   95.00, 'monthly')
+  ('Rack Server R450',        'SRV-R450',  'Servers',     714000.00, 519000.00, 'one_time'),
+  ('Rack Server R650',        'SRV-R650',  'Servers',    1182000.00, 833000.00, 'one_time'),
+  ('Edge Node E20',           'SRV-E20',   'Servers',     272000.00, 200000.00, 'one_time'),
+  ('Core Switch 48P',         'NET-SW48',  'Networking',  391000.00, 268000.00, 'one_time'),
+  ('Access Switch 24P',       'NET-SW24',  'Networking',  157000.00, 105000.00, 'one_time'),
+  ('Firewall FG-200',         'NET-FW200', 'Networking',  442000.00, 306000.00, 'one_time'),
+  ('NVMe Array 24TB',         'STO-N24',   'Storage',     829000.00, 612000.00, 'one_time'),
+  ('Backup Vault 100TB',      'STO-B100',  'Storage',    1054000.00, 774000.00, 'one_time'),
+  ('Install & Commissioning', 'SVC-INST',  'Services',    204000.00, 128000.00, 'one_time'),
+  ('Support Plan Standard',   'SUB-STD',   'Support',      15300.00, 6000.00, 'monthly'),
+  ('Support Plan Premium',    'SUB-PRM',   'Support',      35700.00, 14000.00, 'monthly'),
+  ('Monitoring Suite',        'SUB-MON',   'Support',      22100.00, 8100.00, 'monthly')
 on conflict (sku) do nothing;
 
 -- ============================================================ discount tiers
@@ -377,11 +380,11 @@ on conflict (warehouse_id, product_id) do nothing;
 -- ============================================================ subscription plans
 
 insert into subscription_plans (name, cadence, unit_price, min_term_months) values
-  ('Support Standard — Monthly', 'monthly',   180.00, 12),
-  ('Support Premium — Monthly',  'monthly',   420.00, 12),
-  ('Support Standard — Annual',  'annual',   1950.00, 12),
-  ('Support Premium — Annual',   'annual',   4550.00, 24),
-  ('Monitoring — Quarterly',     'quarterly',  750.00, 12)
+  ('Support Standard — Monthly', 'monthly',   15300.00, 12),
+  ('Support Premium — Monthly',  'monthly',   35700.00, 12),
+  ('Support Standard — Annual',  'annual',   166000.00, 12),
+  ('Support Premium — Annual',   'annual',   387000.00, 24),
+  ('Monitoring — Quarterly',     'quarterly',  63800.00, 12)
 on conflict do nothing;
 
 -- ============================================================ demo customer
@@ -391,7 +394,6 @@ insert into customers (name, email, portal_user_id) values
   ('Northwind Logistics', 'ops@northwind.example', null),
   ('Helios Manufacturing', 'it@helios.example',    null)
 on conflict do nothing;
-
 
 -- ============================================================================
 -- Demo pipeline for the signed-in sales rep, so the dashboard has real shape.

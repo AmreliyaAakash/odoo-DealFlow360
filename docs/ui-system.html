@@ -1,0 +1,874 @@
+<title>DealFlow360 UI System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  /* ---- tokens: complete light palette on bare :root ---- */
+  :root {
+    --paper:      #fbfbfc;
+    --surface:    #ffffff;
+    --surface-2:  #f4f5f7;
+    --ink:        #14161a;
+    --ink-2:      #3d424a;
+    --muted:      #6b6f76;
+    --line:       #e3e5e9;
+    --line-soft:  #eeeff2;
+
+    /* Workspace accents — these are content, taken from the app itself. */
+    --indigo:  #6366f1;
+    --amber:   #f59e0b;
+    --emerald: #10b981;
+
+    --code-bg: #f4f5f7;
+    --code-ink: #1f2937;
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #0e1013;
+      --surface:   #16181d;
+      --surface-2: #1d2026;
+      --ink:       #e9eaee;
+      --ink-2:     #b9bdc5;
+      --muted:     #8b9099;
+      --line:      #292d34;
+      --line-soft: #21242a;
+      --code-bg:   #1d2026;
+      --code-ink:  #cdd2da;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0e1013;
+    --surface:   #16181d;
+    --surface-2: #1d2026;
+    --ink:       #e9eaee;
+    --ink-2:     #b9bdc5;
+    --muted:     #8b9099;
+    --line:      #292d34;
+    --line-soft: #21242a;
+    --code-bg:   #1d2026;
+    --code-ink:  #cdd2da;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  @media (min-width: 1000px) {
+    .shell { grid-template-columns: 210px minmax(0, 1fr); gap: 56px; padding-right: 40px; }
+  }
+
+  /* ---- masthead ---- */
+  .masthead {
+    grid-column: 1 / -1;
+    padding: 56px 0 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.6vw, 46px);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: var(--measure);
+    color: var(--ink-2);
+    font-size: 16.5px;
+    margin: 0;
+  }
+  .stamp {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin-top: 22px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .stamp b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---- contents rail ---- */
+  nav.rail { display: none; }
+  @media (min-width: 1000px) {
+    nav.rail {
+      display: block;
+      position: sticky;
+      top: 24px;
+      align-self: start;
+      padding-top: 40px;
+    }
+  }
+  .rail h2 {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+    font-weight: 500;
+  }
+  .rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: r; }
+  .rail a {
+    display: flex;
+    gap: 10px;
+    padding: 5px 0;
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 13px;
+    border-bottom: 1px solid transparent;
+  }
+  .rail a::before {
+    counter-increment: r;
+    content: counter(r, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    padding-top: 2px;
+  }
+  .rail a:hover { color: var(--ink); }
+  .rail a:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 2px; }
+
+  /* ---- body column ---- */
+  main { padding-top: 40px; min-width: 0; }
+
+  section { padding: 0 0 52px; }
+  section + section { border-top: 1px solid var(--line-soft); padding-top: 44px; }
+
+  h2.sec {
+    font-size: 24px;
+    letter-spacing: -0.015em;
+    font-weight: 650;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  .sec-note { color: var(--muted); font-size: 14px; margin: 0 0 26px; max-width: var(--measure); }
+
+  h3 {
+    font-size: 15.5px;
+    font-weight: 600;
+    margin: 30px 0 10px;
+    letter-spacing: -0.005em;
+  }
+  p { max-width: var(--measure); margin: 0 0 14px; color: var(--ink-2); }
+  p strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--ink); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1.5px 5px;
+    border-radius: 3px;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 14px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--line-soft);
+    overflow-x: auto;
+    margin: 0 0 16px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--muted); }
+
+  /* ---- tables ---- */
+  .tw { overflow-x: auto; margin-bottom: 18px; }
+  table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom-color: var(--line);
+  }
+  td.m, th.m { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  td.dim { color: var(--muted); }
+
+  /* ---- workspace specimens ---- */
+  .ws-grid { display: grid; gap: 14px; grid-template-columns: 1fr; margin-bottom: 20px; }
+  @media (min-width: 640px) { .ws-grid { grid-template-columns: repeat(3, 1fr); } }
+
+  .ws {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 14px;
+    border-top: 3px solid var(--ws);
+  }
+  .ws-name { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .ws-chip {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--ws);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; font-family: var(--sans);
+  }
+  .ws-name b { font-size: 14px; font-weight: 600; }
+  .ws-role { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .ws-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+  .ws-item {
+    font-size: 12px; padding: 5px 8px; border-radius: 6px; color: var(--muted);
+  }
+  .ws-item.on {
+    background: color-mix(in oklab, var(--ws) 12%, transparent);
+    color: var(--ws);
+    font-weight: 550;
+  }
+  .ws-hex { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
+
+  /* ---- status swatches ---- */
+  .sw-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; margin-bottom: 18px; }
+  .sw { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+  .sw i { width: 11px; height: 11px; border-radius: 999px; flex: none; }
+  .sw span { font-family: var(--mono); font-size: 11px; color: var(--muted); display: block; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 11px; font-weight: 550;
+  }
+  .pill i { width: 6px; height: 6px; border-radius: 999px; }
+
+  /* ---- motion demo ---- */
+  .demo {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .demo-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .demo-label {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  button.replay {
+    font-family: var(--mono); font-size: 11px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  button.replay:hover { color: var(--ink); }
+  button.replay:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 7px; background: var(--surface-2);
+    font-size: 12.5px;
+  }
+  .row .ref { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .row .amt { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+  @keyframes df-rise-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .staged { animation: df-rise-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--df-delay, 0ms); }
+
+  /* ---- risk meter specimen ---- */
+  .risk { display: flex; align-items: center; gap: 9px; font-size: 12.5px; margin-bottom: 7px; }
+  .risk .track { width: 78px; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; flex: none; }
+  .risk .fill { height: 100%; border-radius: 999px; }
+  .risk .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; width: 26px; }
+  .risk .desc { color: var(--muted); font-size: 12px; }
+
+  /* ---- callout ---- */
+  .note {
+    border-left: 2px solid var(--amber);
+    background: color-mix(in oklab, var(--amber) 7%, transparent);
+    padding: 12px 16px;
+    border-radius: 0 7px 7px 0;
+    margin: 0 0 18px;
+    max-width: var(--measure);
+  }
+  .note p { margin: 0; font-size: 13.5px; }
+  .note p + p { margin-top: 8px; }
+
+  /* ---- file map ---- */
+  .tree {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    background: var(--code-bg);
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    color: var(--code-ink);
+  }
+  .tree .path { color: var(--ink); }
+  .tree .what { color: var(--muted); }
+
+  footer {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .staged { animation: none; }
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">DealFlow360 · Frontend reference</p>
+    <h1>UI System</h1>
+    <p class="lede">
+      Every screen in the workspace is built from one small set of primitives, three
+      workspace accents, and two motion mechanisms. This is what they are and how to
+      use them — so the next page you add matches the ones already there.
+    </p>
+    <div class="stamp">
+      <span>Next <b>16.3.4</b></span>
+      <span>React <b>19.2.8</b></span>
+      <span>Tailwind <b>4.3.3</b></span>
+      <span>Recharts <b>3.10.1</b></span>
+      <span>Framer Motion <b>13.2.0</b></span>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#stack">The stack</a></li>
+      <li><a href="#primitives">Primitives</a></li>
+      <li><a href="#accents">Workspace accents</a></li>
+      <li><a href="#status">Status palette</a></li>
+      <li><a href="#motion">Motion</a></li>
+      <li><a href="#charts">Charts</a></li>
+      <li><a href="#numbers">Numbers &amp; money</a></li>
+      <li><a href="#map">File map</a></li>
+      <li><a href="#rules">House rules</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1 ................................................................. -->
+    <section id="stack">
+      <h2 class="sec">The stack</h2>
+      <p class="sec-note">What is installed, and what each thing is actually responsible for.</p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>Package</th><th class="m">Version</th><th>Does what, here</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>next</code></td><td class="m">16.3.4</td><td>App Router, Turbopack. Note: middleware is <code>proxy.ts</code> in 16.</td></tr>
+            <tr><td><code>react</code></td><td class="m">19.2.8</td><td>Server Components by default; <code>"use client"</code> only where state or motion needs it.</td></tr>
+            <tr><td><code>tailwindcss</code></td><td class="m">4.3.3</td><td>All styling. No CSS modules, no styled-components.</td></tr>
+            <tr><td><code>recharts</code></td><td class="m">3.10.1</td><td>Every chart. Five files use it.</td></tr>
+            <tr><td><code>framer-motion</code></td><td class="m">13.2.0</td><td>Interactive motion only — pulse loops, expanding rows, tab crossfade.</td></tr>
+            <tr><td><code>@phosphor-icons/react</code></td><td class="m">2.1.10</td><td>All icons. Import <code>/dist/ssr</code> in Server Components.</td></tr>
+            <tr><td><code>@clerk/nextjs</code></td><td class="m">7.9.1</td><td>Auth, and the source of <code>publicMetadata.role</code>.</td></tr>
+            <tr><td><code>@supabase/supabase-js</code></td><td class="m">2.115.0</td><td>Data. Clerk JWT attached per request via the <code>accessToken</code> option.</td></tr>
+            <tr><td><code>@base-ui/react</code></td><td class="m">1.8.0</td><td>Under <code>components/ui/</code> — Dialog is the only piece still in active use.</td></tr>
+            <tr><td><code>xlsx</code> / <code>jspdf</code></td><td class="m">0.18.5 / 4.2.1</td><td>Report export. Lazily imported so they stay out of the initial bundle.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Scripts</h3>
+      <pre><code>npm run dev          <span class="cmt"># next dev</span>
+npm run typecheck    <span class="cmt"># tsc --noEmit — touches no build output</span>
+npm run build:check  <span class="cmt"># builds into .next-build, safe while dev is running</span>
+npm run lint         <span class="cmt"># eslint</span>
+npm run db:build     <span class="cmt"># regenerates db/setup.sql from schema + seed + demo</span></code></pre>
+
+      <div class="note">
+        <p><strong>Never run <code>next build</code> while <code>next dev</code> is up.</strong> They share
+        <code>.next</code>, and the build corrupts the dev server's route manifest — which shows up as
+        404s on routes that plainly exist.</p>
+        <p>Use <code>npm run build:check</code>, which writes to <code>.next-build</code> instead.</p>
+      </div>
+    </section>
+
+    <!-- 2 ................................................................. -->
+    <section id="primitives">
+      <h2 class="sec">Primitives</h2>
+      <p class="sec-note">
+        <code>components/dashboard/panel.tsx</code> is the whole design system. Nine exports.
+        Change them and every screen changes together.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Export</th><th>Use for</th></tr></thead>
+          <tbody>
+            <tr><td class="m">Panel</td><td>Any bordered block. Takes <code>delay</code> in ms for entrance stagger.</td></tr>
+            <tr><td class="m">PanelHeader</td><td>Icon + title + caption, optional corner ↗ link, <code>children</code> land as right-side actions.</td></tr>
+            <tr><td class="m">PageHeader</td><td>Page title + caption + badge. Every page owns its own — there is no top bar.</td></tr>
+            <tr><td class="m">Notice</td><td>Inline warning (<code>tone="warning"</code>) or error (<code>tone="danger"</code>).</td></tr>
+            <tr><td class="m">DataTable</td><td>Scroll container + <code>&lt;table&gt;</code>. Pass <code>head</code> and a <code>minWidth</code>.</td></tr>
+            <tr><td class="m">Th / Td / Tr</td><td>Cells. <code>Tr</code> carries the hover and top border.</td></tr>
+            <tr><td class="m">EmptyRow</td><td>The empty state, spanning <code>colSpan</code>.</td></tr>
+            <tr><td class="m">StatusBadge</td><td>Quotation status pill, tinted from the shared palette.</td></tr>
+            <tr><td class="m">DiscountBadge</td><td>Discount depth — green under 25%, red over.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The one class string that defines a surface</h3>
+      <pre><code>df-rise-in rounded-xl bg-card p-4 ring-1 ring-foreground/10</code></pre>
+      <p>
+        A hairline <code>ring</code> rather than a border, so it never adds to layout size;
+        <code>rounded-xl</code>; a flat <code>bg-card</code> with no shadow. Depth comes from the
+        grey page ground (<code>bg-muted/40</code> on the dashboard layout), not from elevation.
+      </p>
+
+      <h3>Page skeleton</h3>
+      <pre><code>&lt;main className="flex min-w-0 flex-1 flex-col gap-4"&gt;
+  &lt;PageHeader title="…" caption="…" badge="…" /&gt;
+  {error ? &lt;Notice&gt;{error}&lt;/Notice&gt; : null}
+
+  &lt;StatCards … /&gt;                        <span class="cmt">// summary first</span>
+
+  &lt;div className="grid gap-4 xl:grid-cols-3"&gt;
+    &lt;div className="xl:col-span-2"&gt;…&lt;/div&gt;  <span class="cmt">// wide: the chart</span>
+    &lt;SidePanel … /&gt;                        <span class="cmt">// narrow: the list</span>
+  &lt;/div&gt;
+
+  &lt;QueueTable … /&gt;                       <span class="cmt">// detail last</span>
+&lt;/main&gt;</code></pre>
+      <p>
+        <code>min-w-0</code> is not optional — without it a wide table blows the flex row out
+        and the page scrolls sideways. Spacing is always <code>gap</code> on the parent, never
+        margins on children.
+      </p>
+    </section>
+
+    <!-- 3 ................................................................. -->
+    <section id="accents">
+      <h2 class="sec">Workspace accents</h2>
+      <p class="sec-note">
+        Three workspaces, one hue each. The sidebar picks the whole set from the signed-in
+        role — nav items, logo mark, active state and CTA button all switch together.
+      </p>
+
+      <div class="ws-grid">
+        <div class="ws" style="--ws: #6366f1">
+          <div class="ws-name"><span class="ws-chip">D</span><b>Rep</b></div>
+          <div class="ws-role">role: rep → /rep</div>
+          <div class="ws-nav">
+            <div class="ws-item on">Dashboard</div>
+            <div class="ws-item">My Quotations</div>
+            <div class="ws-item">Upsell Suggestions</div>
+          </div>
+          <div class="ws-hex">indigo-500 · #6366f1</div>
+        </div>
+
+        <div class="ws" style="--ws: #f59e0b">
+          <div class="ws-name"><span class="ws-chip">D</span><b>Manager</b></div>
+          <div class="ws-role">role: manager → /manager</div>
+          <div class="ws-nav">
+            <div class="ws-item on">Dashboard</div>
+            <div class="ws-item">Pending Approvals</div>
+            <div class="ws-item">Team Pipeline</div>
+          </div>
+          <div class="ws-hex">amber-500 · #f59e0b</div>
+        </div>
+
+        <div class="ws" style="--ws: #10b981">
+          <div class="ws-name"><span class="ws-chip">D</span><b>Finance</b></div>
+          <div class="ws-role">role: finance → /finance</div>
+          <div class="ws-nav">
+            <div class="ws-item on">Dashboard</div>
+            <div class="ws-item">Fulfillment</div>
+            <div class="ws-item">Subscriptions &amp; Billing</div>
+          </div>
+          <div class="ws-hex">emerald-500 · #10b981</div>
+        </div>
+      </div>
+
+      <p>
+        Defined as <code>WORKSPACES</code> in
+        <code>app/(dashboard)/dashboard-sidebar.tsx</code>. Each entry holds its nav array,
+        home route, CTA copy and three accent class strings.
+      </p>
+
+      <pre><code>finance: {
+  nav: FINANCE_NAV,
+  home: "/finance",
+  showPipeline: false,
+  logo:   "bg-emerald-500",
+  active: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  button: "bg-emerald-500 hover:bg-emerald-400",
+}</code></pre>
+
+      <div class="note">
+        <p><strong>Write accent classes as whole strings.</strong> Tailwind scans source text —
+        <code>`bg-${hue}-500`</code> produces nothing at build time. That is why these are
+        spelled out rather than composed.</p>
+      </div>
+
+      <p>
+        <strong>Admins use the manager workspace</strong> and additionally get the Backend
+        link. Nav visibility mirrors the gating in <code>proxy.ts</code>, so nobody sees a link
+        that would bounce them.
+      </p>
+    </section>
+
+    <!-- 4 ................................................................. -->
+    <section id="status">
+      <h2 class="sec">Status palette</h2>
+      <p class="sec-note">
+        One source in <code>lib/status.ts</code>, shared by chart slices, table badges and the
+        segmented bar — so a colour can never mean two things on one screen.
+      </p>
+
+      <div class="sw-list">
+        <div class="sw"><i style="background:#a1a1aa"></i><div>draft<span>#a1a1aa</span></div></div>
+        <div class="sw"><i style="background:#f59e0b"></i><div>pending approval<span>#f59e0b</span></div></div>
+        <div class="sw"><i style="background:#6366f1"></i><div>approved<span>#6366f1</span></div></div>
+        <div class="sw"><i style="background:#fb923c"></i><div>returned<span>#fb923c</span></div></div>
+        <div class="sw"><i style="background:#ef4444"></i><div>rejected<span>#ef4444</span></div></div>
+        <div class="sw"><i style="background:#10b981"></i><div>won<span>#10b981</span></div></div>
+        <div class="sw"><i style="background:#71717a"></i><div>lost<span>#71717a</span></div></div>
+      </div>
+
+      <h3>How a badge is tinted</h3>
+      <p>
+        Hex plus alpha suffix, inline — not a Tailwind class — because the value comes from
+        data at runtime:
+      </p>
+      <pre><code>style={{ background: `${color}1f`, color }}   <span class="cmt">// 1f ≈ 12% alpha</span></code></pre>
+
+      <p style="margin-bottom:22px">
+        <span class="pill" style="background:#f59e0b1f;color:#f59e0b"><i style="background:#f59e0b"></i>pending approval</span>
+        &nbsp;
+        <span class="pill" style="background:#6366f11f;color:#6366f1"><i style="background:#6366f1"></i>approved</span>
+        &nbsp;
+        <span class="pill" style="background:#10b9811f;color:#10b981"><i style="background:#10b981"></i>won</span>
+      </p>
+
+      <h3>Semantic colour is separate from accent</h3>
+      <p>
+        Green/amber/red mean <em>good, watch, bad</em> everywhere, independent of which
+        workspace you are in. Risk bands come from <code>RISK_BANDS</code> in
+        <code>lib/business-logic.ts</code> — amber at 40, red at 70:
+      </p>
+
+      <div class="risk"><span class="track"><span class="fill" style="width:26%;background:#10b981"></span></span><span class="num">26</span><span class="desc">low — 12% off, 22% margin</span></div>
+      <div class="risk"><span class="track"><span class="fill" style="width:64%;background:#f59e0b"></span></span><span class="num">64</span><span class="desc">medium — 30% off, 10% margin</span></div>
+      <div class="risk"><span class="track"><span class="fill" style="width:100%;background:#ef4444"></span></span><span class="num">100</span><span class="desc">high — 41% off, 4% margin, ₹1.2Cr</span></div>
+
+      <p style="margin-top:16px">
+        The score itself is a weighted blend: discount depth 45%, margin erosion 35%,
+        deal size 20%.
+      </p>
+    </section>
+
+    <!-- 5 ................................................................. -->
+    <section id="motion">
+      <h2 class="sec">Motion</h2>
+      <p class="sec-note">
+        Two mechanisms, chosen by whether the movement happens once on load or responds to
+        the user. Both respect <code>prefers-reduced-motion</code>.
+      </p>
+
+      <h3>A. CSS stagger — entrances</h3>
+      <p>
+        For anything that just needs to arrive: panels, table rows, list items. Defined once
+        in <code>app/globals.css</code>, driven by an inline <code>--df-delay</code> custom
+        property so each sibling can offset itself.
+      </p>
+
+      <pre><code>@keyframes df-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.df-rise-in {
+  animation: df-rise-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--df-delay, 0ms);
+}</code></pre>
+
+      <pre><code>&lt;Tr className="df-rise-in"
+    style={{ "--df-delay": `${index * 40}ms` } as React.CSSProperties}&gt;</code></pre>
+
+      <div class="demo">
+        <div class="demo-head">
+          <span class="demo-label">df-rise-in · 40ms stagger</span>
+          <button class="replay" type="button" id="replay">Replay</button>
+        </div>
+        <div class="rows" id="rows">
+          <div class="row staged" style="--df-delay:0ms"><span class="ref">Q-2026-0006</span> Northwind Logistics <span class="amt">₹18,42,000</span></div>
+          <div class="row staged" style="--df-delay:40ms"><span class="ref">Q-2026-0012</span> Helios Manufacturing <span class="amt">₹11,82,000</span></div>
+          <div class="row staged" style="--df-delay:80ms"><span class="ref">Q-2026-0004</span> Northwind Logistics <span class="amt">₹7,14,000</span></div>
+          <div class="row staged" style="--df-delay:120ms"><span class="ref">Q-2026-0009</span> Helios Manufacturing <span class="amt">₹3,91,000</span></div>
+        </div>
+      </div>
+
+      <p>
+        There is a second keyframe, <code>df-check-in</code> (380ms, overshoots to 1.15), used
+        only for timeline checkmarks as steps complete.
+      </p>
+
+      <h3>B. Framer Motion — interaction</h3>
+      <p>
+        Reach for it when CSS cannot express the movement. Six files use it, and each has a
+        reason:
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Where</th><th>Why not CSS</th></tr></thead>
+          <tbody>
+            <tr><td class="m">manager/stat-cards</td><td>Looping badge pulse, gated on <code>count &gt; 0</code></td></tr>
+            <tr><td class="m">manager/anomaly-highlights</td><td>Dot fades in, then loops only when drift is severe</td></tr>
+            <tr><td class="m">manager/pending-approvals-table</td><td><code>height: 0 → auto</code> on expand, via <code>AnimatePresence</code></td></tr>
+            <tr><td class="m">finance/queue-tabs</td><td>Tab crossfade with <code>mode="wait"</code></td></tr>
+            <tr><td class="m">finance/warehouse-stock</td><td>Bar width grows from 0 to its share</td></tr>
+            <tr><td class="m">finance/stat-cards</td><td>Entrance, consistent with its manager twin</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <pre><code><span class="cmt">// The pulse only runs when there is something to act on.</span>
+const pulsing = Boolean(tile.pulse) &amp;&amp; tile.value &gt; 0 &amp;&amp; !reduceMotion;
+
+&lt;motion.span
+  animate={pulsing ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+  transition={pulsing
+    ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" }
+    : { duration: 0.2 }}
+/&gt;</code></pre>
+
+      <div class="note">
+        <p><strong>Always call <code>useReducedMotion()</code></strong> in a Framer Motion
+        component and branch on it. The CSS media query in <code>globals.css</code> covers the
+        stagger classes, but it does not reach JS-driven animation.</p>
+      </div>
+
+      <h3>C. Count-up</h3>
+      <p>
+        <code>lib/use-count-up.ts</code> animates a stat from 0 on mount — requestAnimationFrame
+        with easeOutCubic. Every state update happens inside the frame callback, never in the
+        effect body, so mounting does not cascade a render.
+      </p>
+    </section>
+
+    <!-- 6 ................................................................. -->
+    <section id="charts">
+      <h2 class="sec">Charts</h2>
+      <p class="sec-note">Recharts, with the same five conventions in every file.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Chart</th><th>Type</th><th>Lives in</th></tr></thead>
+          <tbody>
+            <tr><td>Quotation Pipeline</td><td>Dual-axis line</td><td class="m">rep/pipeline-chart</td></tr>
+            <tr><td>Value by Category</td><td>Horizontal bar</td><td class="m">rep/category-mix-card</td></tr>
+            <tr><td>Pipeline by Status</td><td>Donut</td><td class="m">rep/status-mix-card</td></tr>
+            <tr><td>Approval volume</td><td>Stacked bar</td><td class="m">manager/approval-volume-chart</td></tr>
+            <tr><td>MRR trend</td><td>Gradient area</td><td class="m">finance/mrr-chart</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>The five conventions:</strong></p>
+      <ol>
+        <li>Wrap in <code>ResponsiveContainer</code> inside a fixed-height div (<code>h-60</code>).</li>
+        <li>Axes: <code>tickLine={false} axisLine={false} fontSize={11}</code>, colour from
+            <code>stroke="currentColor"</code> + <code>className="text-muted-foreground"</code> so
+            they follow the theme.</li>
+        <li>Grid: <code>strokeDasharray="3 3"</code>, horizontal only.</li>
+        <li>Tooltip <code>contentStyle</code> reads <code>var(--popover)</code> and
+            <code>var(--border)</code> — never hardcoded colours.</li>
+        <li>Money on an axis goes through <code>formatCompactCurrency</code>, so ticks read
+            <code>₹7.1L</code> and <code>₹1.2Cr</code>.</li>
+      </ol>
+
+      <div class="note">
+        <p><strong>Counts and money never share an axis.</strong> They differ by orders of
+        magnitude — put each on its own <code>yAxisId</code>, or the smaller series flatlines
+        against the larger scale.</p>
+      </div>
+
+      <p>
+        Recharts' <code>Tooltip formatter</code> is typed as
+        <code>ValueType | undefined</code>. Let TypeScript infer the parameter and coerce
+        inside — <code>Number(value ?? 0)</code> — rather than annotating it <code>number</code>,
+        which will not compile.
+      </p>
+    </section>
+
+    <!-- 7 ................................................................. -->
+    <section id="numbers">
+      <h2 class="sec">Numbers &amp; money</h2>
+      <p class="sec-note">
+        All formatting goes through <code>lib/quotations.ts</code>. Nothing calls
+        <code>Intl</code> directly.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Helper</th><th class="m">Input</th><th class="m">Output</th></tr></thead>
+          <tbody>
+            <tr><td class="m">formatCurrency</td><td class="m">714000</td><td class="m">₹7,14,000</td></tr>
+            <tr><td class="m">formatCurrency</td><td class="m">12345678</td><td class="m">₹1,23,45,678</td></tr>
+            <tr><td class="m">formatCompactCurrency</td><td class="m">714000</td><td class="m">₹7.1L</td></tr>
+            <tr><td class="m">formatCompactCurrency</td><td class="m">12345678</td><td class="m">₹1.2Cr</td></tr>
+            <tr><td class="m">formatNumber</td><td class="m">1234567</td><td class="m">12,34,567</td></tr>
+            <tr><td class="m">formatPercent</td><td class="m">0.153</td><td class="m">15.3%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        The locale is <code>en-IN</code>, not just the <code>INR</code> symbol. That is what
+        produces lakh/crore grouping — <code>₹1,23,45,678</code> rather than
+        <code>₹12,345,678</code>. Decimals are dropped on display; tables read better without
+        paise.
+      </p>
+      <p>
+        Any column of digits gets <code>tabular-nums</code> so the figures line up down the
+        column.
+      </p>
+    </section>
+
+    <!-- 8 ................................................................. -->
+    <section id="map">
+      <h2 class="sec">File map</h2>
+      <p class="sec-note">Where the UI lives. Route groups in parentheses do not appear in URLs.</p>
+
+      <div class="tree">
+<span class="path">app/(dashboard)/layout.tsx</span>            <span class="what">shell: sidebar + content, no top bar</span>
+<span class="path">app/(dashboard)/dashboard-sidebar.tsx</span>  <span class="what">WORKSPACES — nav + accent per role</span>
+<span class="path">app/(dashboard)/rep/</span>                   <span class="what">indigo · dashboard, upsell</span>
+<span class="path">app/(dashboard)/manager/</span>               <span class="what">amber · dashboard, team pipeline</span>
+<span class="path">app/(dashboard)/finance/</span>               <span class="what">emerald · dashboard, fulfillment, billing, warehouses</span>
+<span class="path">app/(dashboard)/quotations/</span>            <span class="what">list + [id] builder</span>
+<span class="path">app/(dashboard)/backend/</span>               <span class="what">admin config, four CRUD screens</span>
+
+<span class="path">components/dashboard/panel.tsx</span>         <span class="what">the primitives</span>
+<span class="path">components/dashboard/status-badge.tsx</span>  <span class="what">StatusBadge, DiscountBadge</span>
+<span class="path">components/ui/</span>                        <span class="what">base-ui / shadcn leftovers — Dialog only</span>
+
+<span class="path">lib/status.ts</span>                         <span class="what">STATUS_COLORS, statusLabel</span>
+<span class="path">lib/quotations.ts</span>                     <span class="what">pricing + all money formatting</span>
+<span class="path">lib/business-logic.ts</span>                 <span class="what">risk, approvals, proration, deal health</span>
+<span class="path">lib/use-count-up.ts</span>                   <span class="what">stat animation</span>
+<span class="path">app/globals.css</span>                       <span class="what">theme tokens + df-rise-in / df-check-in</span>
+      </div>
+
+      <p>
+        Each dashboard folder follows the same shape: <code>page.tsx</code> (server, guards +
+        loads), <code>data.ts</code> (queries + aggregation), <code>types.ts</code> (view models
+        and shared constants), then one client component per panel.
+      </p>
+
+      <div class="note">
+        <p><strong>Shared constants belong in <code>types.ts</code>, not <code>data.ts</code>.</strong>
+        A client component importing from <code>data.ts</code> drags <code>clerkClient</code> into
+        the browser bundle and the build fails. That is why
+        <code>ANOMALY_DELTA_PCT</code> sits in <code>types.ts</code>.</p>
+      </div>
+    </section>
+
+    <!-- 9 ................................................................. -->
+    <section id="rules">
+      <h2 class="sec">House rules</h2>
+      <p class="sec-note">The things that will bite you if you skip them.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Rule</th><th>Because</th></tr></thead>
+          <tbody>
+            <tr><td>Server Component by default</td><td>Add <code>"use client"</code> only for state, motion or event handlers.</td></tr>
+            <tr><td>Icons from <code>/dist/ssr</code> in Server Components</td><td>The regular entry point is client-only.</td></tr>
+            <tr><td><code>min-w-0</code> on flex children</td><td>Otherwise wide tables force horizontal page scroll.</td></tr>
+            <tr><td><code>gap</code>, not margins</td><td>Margins collapse and double unpredictably between siblings.</td></tr>
+            <tr><td>Wide content gets <code>overflow-x: auto</code></td><td>The container scrolls, never the page body.</td></tr>
+            <tr><td>No <code>setState</code> in an effect body</td><td>The React compiler lint rejects it — use a rAF or event callback.</td></tr>
+            <tr><td>Theme colours via tokens</td><td><code>bg-card</code>, <code>text-muted-foreground</code> — never a literal that only works in one theme.</td></tr>
+            <tr><td>Empty states are designed</td><td>Every table has an <code>EmptyRow</code>; every panel has a "nothing here" line.</td></tr>
+            <tr><td>Errors render, never throw</td><td>Data loaders return <code>loadError</code>; the page shows a <code>Notice</code> and still draws.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Adding a page — the short version</h3>
+      <ol>
+        <li>Create <code>app/(dashboard)/&lt;area&gt;/page.tsx</code> as a Server Component.</li>
+        <li>Guard it — <code>currentUser()</code> from <code>lib/auth.ts</code>, redirect on the wrong role.</li>
+        <li>Put queries in a sibling <code>data.ts</code> returning <code>{ …, loadError }</code>.</li>
+        <li>Compose the body from <code>PageHeader</code> → stat tiles → chart/side grid → table.</li>
+        <li>Add the route to the right <code>*_NAV</code> array, and to <code>proxy.ts</code> if it needs gating.</li>
+        <li><code>npm run typecheck &amp;&amp; npm run build:check</code>.</li>
+      </ol>
+    </section>
+
+  </main>
+
+  <footer>
+    DealFlow360 — internal frontend reference · Next 16.3.4 · Tailwind 4.3.3
+  </footer>
+</div>
+
+<script>
+  // Replay the stagger demo by re-triggering the animation on each row.
+  document.getElementById("replay").addEventListener("click", () => {
+    document.querySelectorAll("#rows .row").forEach((row) => {
+      row.classList.remove("staged");
+      void row.offsetWidth;          // force reflow so the animation restarts
+      row.classList.add("staged");
+    });
+  });
+</script>

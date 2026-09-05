@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { QuotationBuilder } from "./quotation-builder";
 import type { Product } from "@/lib/quotations";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { PageHeader } from "@/components/dashboard/panel";
+import { StatusBadge } from "@/components/dashboard/status-badge";
 
 type Quotation = {
   id: string;
@@ -45,15 +47,12 @@ export default async function QuotationPage({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
-      <header>
-        <h1 className="text-lg font-semibold">
-          {quotation.reference ?? `Quotation ${quotation.id}`}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {quotation.customers?.name ?? "Unassigned customer"}
-          {quotation.status ? ` · ${quotation.status}` : ""}
-        </p>
-      </header>
+      <PageHeader
+        title={quotation.reference ?? `Quotation ${quotation.id}`}
+        caption={quotation.customers?.name ?? "Unassigned customer"}
+      >
+        <StatusBadge status={quotation.status ?? "draft"} />
+      </PageHeader>
 
       <QuotationBuilder quotationId={quotation.id} catalog={catalog} />
     </main>

@@ -8,7 +8,11 @@ const isPublicRoute = createRouteMatcher([
   "/portal",
 ]);
 const isBackendRoute = createRouteMatcher(["/backend(.*)"]);
-const isApprovalsRoute = createRouteMatcher(["/approvals(.*)"]);
+const isApprovalsRoute = createRouteMatcher([
+  "/approvals(.*)",
+  "/manager(.*)",
+  "/finance(.*)",
+]);
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
 
 const ROLES = new Set<string>(["admin", "manager", "finance", "rep"]);

@@ -10,7 +10,9 @@ import { loadWatchlist } from "./sidebar-data";
 export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   const { userId } = await auth();
   const role = await currentRole();
-  const watchlist = userId ? await loadWatchlist(userId) : [];
+  // Only the rep workspace renders the rail, so skip the query for everyone else.
+  const watchlist =
+    userId && (role === null || role === "rep") ? await loadWatchlist(userId) : [];
 
   return (
     <div className="flex min-h-full flex-1 gap-4 bg-muted/40 p-4">

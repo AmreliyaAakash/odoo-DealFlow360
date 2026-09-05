@@ -57,14 +57,14 @@ export default function SignUpPage() {
   }, []);
 
   return (
-    <main className="h-screen w-screen max-h-screen max-w-full overflow-hidden flex flex-col lg:flex-row font-sans selection:bg-slate-200">
+    <main className="min-h-screen w-full flex flex-col lg:flex-row font-sans selection:bg-slate-200">
       {/* LEFT 50% FULL SCREEN PANEL: Interactive Animated Characters */}
-      <div className="w-full lg:w-1/2 h-1/2 lg:h-full bg-[#f4f4f6] relative flex items-end justify-center overflow-hidden">
+      <div className="w-full lg:w-1/2 h-64 lg:h-screen lg:sticky lg:top-0 bg-[#f4f4f6] relative flex items-end justify-center overflow-hidden">
         <AnimatedCharacters formState={formState} />
       </div>
 
       {/* RIGHT 50% FULL SCREEN PANEL: Clerk Auth Form & Header */}
-      <div className="w-full lg:w-1/2 h-1/2 lg:h-full bg-white text-slate-900 flex flex-col justify-between p-6 sm:p-10 lg:p-14 overflow-hidden">
+      <div className="w-full lg:w-1/2 lg:min-h-screen bg-white text-slate-900 flex flex-col justify-between p-6 sm:p-10 lg:p-14">
         <div className="w-full max-w-sm mx-auto my-auto flex flex-col items-center">
           {/* Top Star Logo */}
           <div className="mb-4 sm:mb-6 flex items-center justify-center">
@@ -112,6 +112,13 @@ export default function SignUpPage() {
               }}
             />
           </div>
+
+          {/*
+            Smart CAPTCHA (Cloudflare Turnstile) needs a visible mount point.
+            Without one Clerk cannot resolve the challenge, and the social
+            buttons hang on their spinner instead of redirecting.
+          */}
+          <div id="clerk-captcha" className="mt-4 flex w-full justify-center" />
         </div>
 
         {/* Bottom link back home */}
