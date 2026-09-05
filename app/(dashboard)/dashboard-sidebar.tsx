@@ -129,6 +129,12 @@ const CONFIG_NAV: Item[] = [
     module: "discountRules",
   },
   {
+    href: "/backend/price-lists",
+    label: "Price Lists",
+    icon: CurrencyInrIcon,
+    module: "products",
+  },
+  {
     href: "/backend/warehouses",
     label: "Warehouses",
     icon: WarehouseIcon,
@@ -414,6 +420,34 @@ export function DashboardSidebar({
 
   const view = layout(rail);
 
+  const allNavItems = [...items, ...config];
+
+  // Pick the single most specific active item
+  const getActiveHref = () => {
+    // 1. Exact match has highest priority
+    const exact = allNavItems.find((i) => i.href === pathname);
+    if (exact) return exact.href;
+
+    // 2. Prefix match (longest matching prefix wins)
+    const matchingPrefixes = allNavItems
+      .filter((i) => {
+        if (i.href === workspace.home) return false;
+        if (i.prefix) {
+          return pathname === i.prefix || pathname.startsWith(`${i.prefix}/`);
+        }
+        return pathname.startsWith(`${i.href}/`);
+      })
+      .sort((a, b) => {
+        const lenA = (a.prefix || a.href).length;
+        const lenB = (b.prefix || b.href).length;
+        return lenB - lenA;
+      });
+
+    return matchingPrefixes[0]?.href ?? null;
+  };
+
+  const activeHref = getActiveHref();
+
   return (
     <aside
       className={cn(
@@ -471,23 +505,15 @@ export function DashboardSidebar({
           below it on an admin or finance desk to carry a scrollbar of its own. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <nav className="mt-3 flex flex-col gap-0.5">
-          {items.map((item) => {
-            const isExact = pathname === item.href;
-            const isPrefix = item.prefix
-              ? pathname.startsWith(item.prefix)
-              : item.href !== workspace.home &&
-                pathname.startsWith(`${item.href}/`);
-
-            return (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={isExact || isPrefix}
-                accent={workspace.active}
-                view={view}
-              />
-            );
-          })}
+          {items.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={item.href === activeHref}
+              accent={workspace.active}
+              view={view}
+            />
+          ))}
         </nav>
 
         {config.length > 0 ? (
@@ -523,7 +549,7 @@ export function DashboardSidebar({
                 <NavLink
                   key={item.href}
                   item={item}
-                  active={pathname === item.href}
+                  active={item.href === activeHref}
                   accent={workspace.active}
                   view={view}
                 />

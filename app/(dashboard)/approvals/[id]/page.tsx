@@ -80,8 +80,8 @@ export default async function ApprovalDetailPage({
   const actor = await requireModule("approvals");
   const supabase = createServerSupabaseClient();
 
-  const [quotationResult, decisionsResult, rulesResult] = await Promise.all([
-    supabase
+  const quotationPromise = (async () => {
+    const res = await supabase
       .from("quotations")
       .select(
         `id, reference, status, rep_id, net_total, margin_total, max_discount_pct,
@@ -91,18 +91,70 @@ export default async function ApprovalDetailPage({
                          products(name, category, cadence))`,
       )
       .eq("id", id)
-      .maybeSingle<QuotationRow>(),
+      .maybeSingle<QuotationRow>();
+
+    if (!res.error) return res;
+
+    // Fallback if customers.tier is not present
+    const fallback = await supabase
+      .from("quotations")
+      .select(
+        `id, reference, status, rep_id, net_total, margin_total, max_discount_pct,
+         risk_score, required_approvals, submitted_by, submitted_at,
+         customers(name),
+         quotation_lines(id, qty, discount_pct, unit_price,
+                         products(name, category, cadence))`,
+      )
+      .eq("id", id)
+      .maybeSingle<any>();
+
+    if (fallback.error || !fallback.data) return res;
+
+    return {
+      data: {
+        ...fallback.data,
+        customers: fallback.data.customers
+          ? { name: fallback.data.customers.name, tier: "standard" }
+          : null,
+      } as QuotationRow,
+      error: null,
+    };
+  })();
+
+  const rulesPromise = (async () => {
+    const res = await supabase
+      .from("discount_rules")
+      .select("scope, scope_ref, customer_tier, max_discount_pct")
+      .eq("active", true)
+      .returns<DiscountRule[]>();
+
+    if (!res.error) return res;
+
+    const fallback = await supabase
+      .from("discount_rules")
+      .select("scope, scope_ref, max_discount_pct")
+      .eq("active", true);
+
+    if (fallback.error || !fallback.data) return res;
+
+    return {
+      data: (fallback.data as any[]).map((r) => ({
+        ...r,
+        customer_tier: null,
+      })) as DiscountRule[],
+      error: null,
+    };
+  })();
+
+  const [quotationResult, decisionsResult, rulesResult] = await Promise.all([
+    quotationPromise,
     supabase
       .from("approvals")
       .select("id, level, action, reason, decided_by, decided_at")
       .eq("quotation_id", id)
       .order("decided_at", { ascending: true })
       .returns<DecisionRow[]>(),
-    supabase
-      .from("discount_rules")
-      .select("scope, scope_ref, customer_tier, max_discount_pct")
-      .eq("active", true)
-      .returns<DiscountRule[]>(),
+    rulesPromise,
   ]);
 
   if (quotationResult.error) {

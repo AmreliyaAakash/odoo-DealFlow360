@@ -11,6 +11,7 @@ import type { Module } from "@/lib/permissions";
 export const BACKEND_ENTITIES = [
   "products",
   "discount-rules",
+  "price-lists",
   "warehouses",
   "subscriptions",
   "upsell-rules",
@@ -192,6 +193,49 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       "approval_level",
       "active",
     ],
+  },
+
+  "price-lists": {
+    table: "price_lists",
+    title: "Price Lists",
+    module: "products",
+    labelColumn: "name",
+    orderBy: "name",
+    softDelete: true,
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      {
+        key: "product_id",
+        label: "Product (optional)",
+        type: "reference",
+        reference: PRODUCT_REF,
+        hint: "Leave empty to apply to all products for this customer tier.",
+      },
+      {
+        key: "tier",
+        label: "Customer tier",
+        type: "select",
+        options: ["standard", "silver", "gold", "platinum"] as const,
+        required: true,
+      },
+      { key: "currency", label: "Currency", type: "text", required: true },
+      {
+        key: "rule",
+        label: "Pricing rule",
+        type: "select",
+        options: ["percent_off", "fixed", "none"] as const,
+        required: true,
+      },
+      {
+        key: "amount",
+        label: "Adjustment amount / %",
+        type: "number",
+        required: true,
+        min: 0,
+        hint: "Percent discount off base (e.g. 10 for 10% off) or fixed override price.",
+      },
+    ],
+    columns: ["id", "name", "product_id", "tier", "currency", "rule", "amount", "active"],
   },
 
   warehouses: {

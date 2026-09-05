@@ -2,6 +2,8 @@ import {
   DISCOUNT_RULE_SELECT,
   PENDING_SELECT,
   buildPendingApprovals,
+  fetchDiscountRulesForApprovals,
+  fetchQuotationsForApprovals,
   type ApprovalDiscountRule,
   type QuotationRow,
 } from "@/lib/approvals-server";
@@ -58,22 +60,13 @@ export async function loadManagerDashboard(
   const supabase = createServerSupabaseClient();
 
   const [quotations, approvals, rules] = await Promise.all([
-    supabase
-      .from("quotations")
-      .select(PENDING_SELECT)
-      .order("submitted_at", { ascending: false, nullsFirst: false })
-      .limit(500)
-      .returns<QuotationRow[]>(),
+    fetchQuotationsForApprovals(supabase, { limit: 500 }),
     supabase
       .from("approvals")
       .select("action, level, decided_at")
       .gte("decided_at", daysAgoIso(VOLUME_DAYS))
       .returns<ApprovalRow[]>(),
-    supabase
-      .from("discount_rules")
-      .select(DISCOUNT_RULE_SELECT)
-      .eq("active", true)
-      .returns<ApprovalDiscountRule[]>(),
+    fetchDiscountRulesForApprovals(supabase),
   ]);
 
   const error =

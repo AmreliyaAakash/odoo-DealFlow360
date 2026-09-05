@@ -208,63 +208,77 @@ export const FALLBACK_PENDING_SELECT = `
 export const FALLBACK_DISCOUNT_RULE_SELECT =
   "name, scope, scope_ref, max_discount_pct";
 
+export async function fetchQuotationsForApprovals(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  options?: { status?: string | string[]; limit?: number },
+): Promise<{ data: QuotationRow[]; error: any }> {
+  const query = (select: string) => {
+    let q = supabase.from("quotations").select(select);
+    if (options?.status) {
+      if (Array.isArray(options.status)) {
+        q = q.in("status", options.status);
+      } else {
+        q = q.eq("status", options.status);
+      }
+    }
+    q = q.order("submitted_at", { ascending: false, nullsFirst: false });
+    if (options?.limit) {
+      q = q.limit(options.limit);
+    }
+    return q;
+  };
+
+  const res = await query(PENDING_SELECT).returns<QuotationRow[]>();
+  if (!res.error && res.data) return res;
+
+  const fallback = await query(FALLBACK_PENDING_SELECT);
+  if (fallback.error || !fallback.data) {
+    return { data: [], error: fallback.error ?? res.error };
+  }
+
+  const rows: QuotationRow[] = (fallback.data as any[]).map((r) => ({
+    ...r,
+    customers: r.customers ? { name: r.customers.name, tier: "standard" } : null,
+  }));
+  return { data: rows, error: null };
+}
+
+export async function fetchDiscountRulesForApprovals(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+): Promise<{ data: ApprovalDiscountRule[]; error: any }> {
+  const res = await supabase
+    .from("discount_rules")
+    .select(DISCOUNT_RULE_SELECT)
+    .eq("active", true)
+    .returns<ApprovalDiscountRule[]>();
+
+  if (!res.error && res.data) return res;
+
+  const fallback = await supabase
+    .from("discount_rules")
+    .select(FALLBACK_DISCOUNT_RULE_SELECT)
+    .eq("active", true);
+
+  if (fallback.error || !fallback.data) {
+    return { data: [], error: fallback.error ?? res.error };
+  }
+
+  const rules: ApprovalDiscountRule[] = (fallback.data as any[]).map((r) => ({
+    ...r,
+    customer_tier: null,
+  }));
+  return { data: rules, error: null };
+}
+
 /** The queue for one approver, fetched and built. Used by /approvals. */
 export async function loadPendingApprovals(
   role: Role | null,
 ): Promise<{ pending: PendingApproval[]; loadError: string | null }> {
   const supabase = createServerSupabaseClient();
 
-  const quotationsPromise = (async () => {
-    const res = await supabase
-      .from("quotations")
-      .select(PENDING_SELECT)
-      .eq("status", "pending_approval")
-      .order("submitted_at", { ascending: false, nullsFirst: false })
-      .returns<QuotationRow[]>();
-
-    if (!res.error) return res;
-
-    const fallback = await supabase
-      .from("quotations")
-      .select(FALLBACK_PENDING_SELECT)
-      .eq("status", "pending_approval")
-      .order("submitted_at", { ascending: false, nullsFirst: false });
-
-    if (fallback.error || !fallback.data) return res;
-
-    const rows: QuotationRow[] = (fallback.data as any[]).map((r) => ({
-      ...r,
-      customers: r.customers ? { name: r.customers.name, tier: "standard" } : null,
-    }));
-    return { data: rows, error: null };
-  })();
-
-  const rulesPromise = (async () => {
-    const res = await supabase
-      .from("discount_rules")
-      .select(DISCOUNT_RULE_SELECT)
-      .eq("active", true)
-      .returns<ApprovalDiscountRule[]>();
-
-    if (!res.error) return res;
-
-    const fallback = await supabase
-      .from("discount_rules")
-      .select(FALLBACK_DISCOUNT_RULE_SELECT)
-      .eq("active", true);
-
-    if (fallback.error || !fallback.data) return res;
-
-    const rules: ApprovalDiscountRule[] = (fallback.data as any[]).map((r) => ({
-      ...r,
-      customer_tier: null,
-    }));
-    return { data: rules, error: null };
-  })();
-
   const [quotations, rules] = await Promise.all([
-    quotationsPromise,
-    rulesPromise,
+    fetchQuotationsForApprovals(supabase, { status: "pending_approval" }),
+    fetchDiscountRulesForApprovals(supabase),
   ]);
 
   const loadError = quotations.error?.message ?? rules.error?.message ?? null;
@@ -334,17 +348,8 @@ export async function loadApprovalBoard(
   const supabase = createServerSupabaseClient();
 
   const [quotations, rules, settled] = await Promise.all([
-    supabase
-      .from("quotations")
-      .select(PENDING_SELECT)
-      .eq("status", "pending_approval")
-      .order("submitted_at", { ascending: false, nullsFirst: false })
-      .returns<QuotationRow[]>(),
-    supabase
-      .from("discount_rules")
-      .select(DISCOUNT_RULE_SELECT)
-      .eq("active", true)
-      .returns<ApprovalDiscountRule[]>(),
+    fetchQuotationsForApprovals(supabase, { status: "pending_approval" }),
+    fetchDiscountRulesForApprovals(supabase),
     // `won` counts as approved: a deal the customer accepted was approved
     // first, and dropping it would make the approved counter fall as deals
     // close, which is exactly backwards.

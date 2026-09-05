@@ -65,8 +65,8 @@ export async function loadPortalQuote(
 ): Promise<PortalQuoteResult> {
   const supabase = createServerSupabaseClient();
 
-  const [quotation, allocations, messages] = await Promise.all([
-    supabase
+  const quotationPromise = (async () => {
+    const res = await supabase
       .from("quotations")
       .select(
         `id, customer_id, reference, status, notes, valid_until, subtotal, discount_total, net_total,
@@ -76,7 +76,37 @@ export async function loadPortalQuote(
                          products(name, category, sku, cadence))`,
       )
       .eq("id", quoteId)
-      .maybeSingle<QuoteRow>(),
+      .maybeSingle<QuoteRow>();
+
+    if (!res.error) return res;
+
+    const fallback = await supabase
+      .from("quotations")
+      .select(
+        `id, customer_id, reference, status, notes, valid_until, subtotal, discount_total, net_total,
+         max_discount_pct, requested_delivery_date, submitted_at, created_at,
+         customers(name, email, phone, address),
+         quotation_lines(id, qty, discount_pct, unit_price,
+                         products(name, category, sku, cadence))`,
+      )
+      .eq("id", quoteId)
+      .maybeSingle<any>();
+
+    if (fallback.error || !fallback.data) return res;
+
+    return {
+      data: {
+        ...fallback.data,
+        customers: fallback.data.customers
+          ? { ...fallback.data.customers, tier: "standard" }
+          : null,
+      } as QuoteRow,
+      error: null,
+    };
+  })();
+
+  const [quotation, allocations, messages] = await Promise.all([
+    quotationPromise,
     supabase
       .from("quotation_allocations")
       .select("qty")

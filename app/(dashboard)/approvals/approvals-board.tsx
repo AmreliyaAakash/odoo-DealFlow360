@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ClockIcon, CheckCircleIcon, ArrowUUpLeftIcon } from "@phosphor-icons/react";
 import type { PendingApproval, SettledApproval } from "@/lib/approvals-server";
-import { formatCurrency } from "@/lib/quotations";
+import { formatCurrency, formatNumber } from "@/lib/quotations";
 import { cn } from "@/lib/utils";
 import {
   DataTable,
@@ -44,28 +44,32 @@ export function ApprovalsBoard({
 
   return (
     <>
+      {/* Top 3 Stat Cards */}
       <div className="grid gap-3 sm:grid-cols-3">
         <Counter
-          label="Pending"
+          label="Pending Approvals"
           count={pending.length}
+          subtitle="Waiting on desk sign-off"
           icon={ClockIcon}
-          tone="amber"
+          tint="bg-amber-500/10 text-amber-600 dark:text-amber-400"
           active={view === "pending"}
           onClick={() => setView("pending")}
         />
         <Counter
-          label="Returned"
+          label="Returned Deals"
           count={returned.length}
+          subtitle="Sent back for rep revision"
           icon={ArrowUUpLeftIcon}
-          tone="red"
+          tint="bg-rose-500/10 text-rose-600 dark:text-rose-400"
           active={view === "returned"}
           onClick={() => setView("returned")}
         />
         <Counter
-          label="Approved"
+          label="Approved Deals"
           count={approved.length}
+          subtitle="Cleared desk & approved"
           icon={CheckCircleIcon}
-          tone="emerald"
+          tint="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           active={view === "approved"}
           onClick={() => setView("approved")}
         />
@@ -98,24 +102,20 @@ export function ApprovalsBoard({
   );
 }
 
-const TONES = {
-  amber: "text-amber-600 dark:text-amber-400",
-  red: "text-red-600 dark:text-red-400",
-  emerald: "text-emerald-600 dark:text-emerald-400",
-} as const;
-
 function Counter({
   label,
   count,
+  subtitle,
   icon: Icon,
-  tone,
+  tint,
   active,
   onClick,
 }: {
   label: string;
   count: number;
+  subtitle: string;
   icon: React.ComponentType<{ size?: number; weight?: "fill" }>;
-  tone: keyof typeof TONES;
+  tint: string;
   active: boolean;
   onClick: () => void;
 }) {
@@ -125,19 +125,35 @@ function Counter({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex items-center gap-3 rounded-xl bg-card p-3 text-left ring-1 transition-colors",
+        "group flex flex-col justify-between rounded-xl p-4 text-left transition-colors ring-1",
         active
-          ? "ring-2 ring-foreground/20"
-          : "ring-foreground/5 hover:bg-muted/40",
+          ? "bg-card ring-foreground/25 shadow-xs"
+          : "bg-card/60 ring-foreground/10 hover:bg-muted/50 hover:ring-foreground/15",
       )}
     >
-      <span className={cn("flex", TONES[tone])}>
-        <Icon size={18} weight="fill" />
-      </span>
-      <span>
-        <span className="block text-xl font-semibold tabular-nums">{count}</span>
-        <span className="block text-[11px] text-muted-foreground">{label}</span>
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-lg",
+              tint,
+            )}
+          >
+            <Icon size={15} weight="fill" />
+          </span>
+          <p className="truncate text-xs font-medium text-foreground">{label}</p>
+        </div>
+        {active && (
+          <span className="flex size-1.5 rounded-full bg-foreground shrink-0" />
+        )}
+      </div>
+
+      <div className="mt-3">
+        <p className="text-2xl font-semibold tracking-tight tabular-nums text-foreground">
+          {formatNumber(count)}
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground truncate">{subtitle}</p>
+      </div>
     </button>
   );
 }

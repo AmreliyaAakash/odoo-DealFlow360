@@ -1,4 +1,10 @@
-/** Shared quotation shapes and pricing math, used by the builder UI and the API. */
+export type ProductVariant = {
+  id: string;
+  name: string;
+  attribute: string;
+  value: string;
+  extraPrice: number;
+};
 
 export type Product = {
   id: string;
@@ -9,6 +15,7 @@ export type Product = {
   cost: number;
   /** Billing rhythm. Anything but `one_time` makes the product a subscription. */
   cadence?: BillingCadence;
+  variants?: ProductVariant[];
 };
 
 /** Columns every product query needs for the shapes in this module to be whole. */
@@ -50,12 +57,37 @@ export function isSubscription(product: ProductFacts): boolean {
   return productKind(product) === "subscription";
 }
 
+export function defaultVariantsForProduct(product: ProductFacts): ProductVariant[] {
+  const kind = productKind(product);
+  if (kind === "service") {
+    return [
+      { id: "std", name: "Standard (8x5)", attribute: "Tier", value: "Standard", extraPrice: 0 },
+      { id: "prem", name: "24x7 Priority Support (+₹2,500)", attribute: "Tier", value: "24x7 Priority", extraPrice: 2500 },
+    ];
+  }
+  if (kind === "subscription") {
+    return [
+      { id: "std", name: "Standard Plan", attribute: "Edition", value: "Standard", extraPrice: 0 },
+      { id: "ent", name: "Enterprise Plan (+₹1,000)", attribute: "Edition", value: "Enterprise", extraPrice: 1000 },
+    ];
+  }
+  return [
+    { id: "single", name: "Single Unit", attribute: "Pack", value: "Single", extraPrice: 0 },
+    { id: "pack5", name: "5-Pack Bundle (+₹1,500)", attribute: "Pack", value: "5-Pack", extraPrice: 1500 },
+    { id: "pro", name: "Pro Edition (+₹3,500)", attribute: "Edition", value: "Pro", extraPrice: 3500 },
+  ];
+}
+
 export type QuotationLineInput = {
   productId: string;
   qty: number;
   discountPct: number;
   /** Chosen billing cycle. Set only on subscription lines. */
   subscriptionPlanId?: string | null;
+  /** Selected product variant (Spec A2 / B3) */
+  variantId?: string | null;
+  variantName?: string | null;
+  variantExtraPrice?: number | null;
   /**
    * Negotiated unit price, overriding the catalog list price.
    *
@@ -83,12 +115,20 @@ export type QuotationSummary = LineTotals & {
   lineCount: number;
 };
 
-/** The price this line actually quotes: the rep's override, else list price. */
+/** The price this line actually quotes: the rep's override, else list price, plus any variant extra price. */
 export function unitPriceFor(product: Product, line: QuotationLineInput): number {
   const override = line.unitPrice;
-  return typeof override === "number" && Number.isFinite(override) && override >= 0
-    ? override
-    : product.list_price;
+  const base =
+    typeof override === "number" && Number.isFinite(override) && override >= 0
+      ? override
+      : product.list_price;
+
+  const extra =
+    typeof line.variantExtraPrice === "number" && Number.isFinite(line.variantExtraPrice)
+      ? line.variantExtraPrice
+      : 0;
+
+  return base + extra;
 }
 
 export function lineTotals(product: Product, line: QuotationLineInput): LineTotals {

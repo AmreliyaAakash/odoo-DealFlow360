@@ -83,6 +83,23 @@ const PRODUCT_SELECT =
 export async function loadCatalog(): Promise<CatalogSummary> {
   const supabase = createServerSupabaseClient();
 
+  const variantPromise = (async () => {
+    const res = await supabase
+      .from("product_variants")
+      .select("product_id, attribute, values")
+      .returns<{ product_id: string; attribute: string; values: string[] }[]>();
+    return res.error ? { data: [], error: null } : res;
+  })();
+
+  const pricePromise = (async () => {
+    const res = await supabase
+      .from("price_lists")
+      .select("tier, currency")
+      .eq("active", true)
+      .returns<{ tier: string; currency: string }[]>();
+    return res.error ? { data: [], error: null } : res;
+  })();
+
   const [productResult, variantResult, priceResult] = await Promise.all([
     supabase
       .from("products")
@@ -90,19 +107,11 @@ export async function loadCatalog(): Promise<CatalogSummary> {
       .order("category", { ascending: true })
       .order("name", { ascending: true })
       .returns<RawProduct[]>(),
-    supabase
-      .from("product_variants")
-      .select("product_id, attribute, values")
-      .returns<{ product_id: string; attribute: string; values: string[] }[]>(),
-    supabase
-      .from("price_lists")
-      .select("tier, currency")
-      .eq("active", true)
-      .returns<{ tier: string; currency: string }[]>(),
+    variantPromise,
+    pricePromise,
   ]);
 
-  const failure =
-    productResult.error ?? variantResult.error ?? priceResult.error;
+  const failure = productResult.error;
 
   // Attributes per product, so the list column reads "3 (RAM, Rails)" rather
   // than a bare count the admin has to open the product to understand.
@@ -170,8 +179,8 @@ export async function loadProduct(id: string): Promise<ProductDetail | null> {
 
   if (error || !row) return null;
 
-  const [variantResult, priceResult, stockResult] = await Promise.all([
-    supabase
+  const variantPromise = (async () => {
+    const res = await supabase
       .from("product_variants")
       .select("id, attribute, values, extra_price, position")
       .eq("product_id", id)
@@ -184,11 +193,12 @@ export async function loadProduct(id: string): Promise<ProductDetail | null> {
           extra_price: number;
           position: number;
         }[]
-      >(),
-    // Catalogue-wide rules matter here too: a tier with no product-specific
-    // entry still has a price, and hiding the rule that sets it would make the
-    // resolved figure below look like it came from nowhere.
-    supabase
+      >();
+    return res.error ? { data: [], error: null } : res;
+  })();
+
+  const pricePromise = (async () => {
+    const res = await supabase
       .from("price_lists")
       .select("id, product_id, tier, currency, rule, amount, active")
       .or(`product_id.eq.${id},product_id.is.null`)
@@ -203,12 +213,23 @@ export async function loadProduct(id: string): Promise<ProductDetail | null> {
           amount: number;
           active: boolean;
         }[]
-      >(),
-    supabase
+      >();
+    return res.error ? { data: [], error: null } : res;
+  })();
+
+  const stockPromise = (async () => {
+    const res = await supabase
       .from("warehouse_stock")
       .select("available, warehouses(active)")
       .eq("product_id", id)
-      .returns<{ available: number; warehouses: { active: boolean } | null }[]>(),
+      .returns<{ available: number; warehouses: { active: boolean } | null }[]>();
+    return res.error ? { data: [], error: null } : res;
+  })();
+
+  const [variantResult, priceResult, stockResult] = await Promise.all([
+    variantPromise,
+    pricePromise,
+    stockPromise,
   ]);
 
   const product: CatalogProduct = {

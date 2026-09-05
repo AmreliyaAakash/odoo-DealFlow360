@@ -24,6 +24,7 @@ import {
 } from "@/lib/business-logic";
 import {
   PRODUCT_KIND_LABELS,
+  defaultVariantsForProduct,
   formatCurrency,
   formatPercent,
   lineTotals,
@@ -83,6 +84,9 @@ type FormLine = {
   unitPrice: number;
   discountPct: number;
   subscriptionPlanId: string | null;
+  variantId?: string | null;
+  variantName?: string | null;
+  variantExtraPrice?: number | null;
   /** Fields the rep has actually visited, so a pristine row is not scolded. */
   touched: Partial<Record<LineField, boolean>>;
 };
@@ -98,6 +102,9 @@ const freshLine = (): FormLine => ({
   unitPrice: 0,
   discountPct: 0,
   subscriptionPlanId: null,
+  variantId: null,
+  variantName: null,
+  variantExtraPrice: 0,
   touched: {},
 });
 
@@ -318,6 +325,10 @@ export function QuotationForm({
           qty: line.qty,
           discountPct: line.discountPct,
           unitPrice: line.unitPrice,
+          variantId: line.variantId,
+          variantName: line.variantName,
+          variantExtraPrice: line.variantExtraPrice,
+          subscriptionPlanId: line.subscriptionPlanId,
         })),
     [lines],
   );
@@ -735,7 +746,7 @@ function LineRow({
       className="df-rise-in flex flex-wrap items-start gap-3 rounded-xl bg-muted/30 p-3 ring-1 ring-foreground/5"
       style={{ "--df-delay": `${index * 40}ms` } as React.CSSProperties}
     >
-      <Field label="Product" error={show("product")} className="w-64">
+      <Field label="Product" error={show("product")} className="w-56">
         <SearchableSelect
           label={`Product for line ${index + 1}`}
           value={line.productId}
@@ -745,6 +756,40 @@ function LineRow({
           onChange={onChooseProduct}
         />
       </Field>
+
+      {product ? (
+        <Field label="Variant / Spec" className="w-48">
+          <select
+            value={line.variantId ?? "single"}
+            onChange={(e) => {
+              const vId = e.target.value;
+              const variants = product.variants ?? defaultVariantsForProduct(product);
+              const found = variants.find((v) => v.id === vId);
+              if (found) {
+                onChange({
+                  variantId: found.id,
+                  variantName: found.name,
+                  variantExtraPrice: found.extraPrice,
+                  touched: { unitPrice: true },
+                });
+              } else {
+                onChange({
+                  variantId: null,
+                  variantName: null,
+                  variantExtraPrice: 0,
+                });
+              }
+            }}
+            className="h-8 w-full rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500"
+          >
+            {(product.variants ?? defaultVariantsForProduct(product)).map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
 
       <Field label="Qty" error={show("qty")} className="w-20">
         <NumberInput

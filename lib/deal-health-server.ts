@@ -25,13 +25,22 @@ const SETTLED_STATUSES = ["won", "lost"];
 const BASELINE_WINDOW = 200;
 
 export const DEAL_HEALTH_SELECT =
-  `id, reference, status, rep_id, net_total, margin_total, max_discount_pct,
+  `id, reference, status, rep_id, customer_name, customer_id, customer:customers(name), net_total, margin_total, max_discount_pct,
    updated_at, submitted_at, valid_until`;
+
+export type ApprovalBreakdown = {
+  pending: number;
+  approved: number;
+  rejected: number;
+  managerOnly: number;
+  managerFinance: number;
+};
 
 export type DealHealthData = {
   quotations: DealHealthQuotation[];
   /** Mean discount depth per rep, from their settled deals. */
   baselines: Record<string, number>;
+  approvalBreakdown: ApprovalBreakdown;
   error: string | null;
 };
 
@@ -40,23 +49,45 @@ export async function loadDealHealth(
 ): Promise<DealHealthData> {
   const supabase = createServerSupabaseClient();
 
-  let openQuery = supabase
+  const openQuery = (async () => {
+    let q = supabase
+      .from("quotations")
+      .select(DEAL_HEALTH_SELECT)
+      .in("status", OPEN_STATUSES)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+
+    if (scopeToRep) q = q.eq("rep_id", scopeToRep);
+
+    const res = await q.returns<DealHealthQuotation[]>();
+    if (!res.error) return res;
+
+    // Fallback if joined customer fields fail
+    let fallbackQ = supabase
+      .from("quotations")
+      .select(`id, reference, status, rep_id, net_total, margin_total, max_discount_pct, updated_at, submitted_at, valid_until`)
+      .in("status", OPEN_STATUSES)
+      .order("updated_at", { ascending: false })
+      .limit(100);
+
+    if (scopeToRep) fallbackQ = fallbackQ.eq("rep_id", scopeToRep);
+    return fallbackQ.returns<DealHealthQuotation[]>();
+  })();
+
+  const allQuotesPromise = supabase
     .from("quotations")
-    .select(DEAL_HEALTH_SELECT)
-    .in("status", OPEN_STATUSES)
-    .order("updated_at", { ascending: false })
-    .limit(100);
+    .select("status, max_discount_pct, margin_total, net_total")
+    .limit(500);
 
-  if (scopeToRep) openQuery = openQuery.eq("rep_id", scopeToRep);
-
-  const [open, settled] = await Promise.all([
-    openQuery.returns<DealHealthQuotation[]>(),
+  const [open, settled, allQuotes] = await Promise.all([
+    openQuery,
     supabase
       .from("quotations")
       .select("rep_id, max_discount_pct")
       .in("status", SETTLED_STATUSES)
       .limit(BASELINE_WINDOW)
       .returns<{ rep_id: string; max_discount_pct: number | null }[]>(),
+    allQuotesPromise,
   ]);
 
   const failure = open.error ?? settled.error;
@@ -71,14 +102,39 @@ export async function loadDealHealth(
   const baselines: Record<string, number> = {};
   for (const [repId, depths] of depthsByRep) {
     const baseline = discountBaseline(depths);
-    // Only reps with enough history get one; the rest are judged on the
-    // absolute threshold alone rather than against a number built from two deals.
     if (baseline !== null) baselines[repId] = baseline;
   }
+
+  // Calculate approval breakdown
+  let pendingCount = 0;
+  let approvedCount = 0;
+  let rejectedCount = 0;
+  let managerOnlyCount = 0;
+  let managerFinanceCount = 0;
+
+  for (const q of allQuotes.data ?? []) {
+    const st = q.status;
+    const disc = Number(q.max_discount_pct ?? 0);
+    if (st === "pending_approval") pendingCount++;
+    if (st === "approved" || st === "won") approvedCount++;
+    if (st === "rejected" || st === "lost") rejectedCount++;
+
+    if (disc > 0 && disc <= 25) managerOnlyCount++;
+    else if (disc > 25) managerFinanceCount++;
+  }
+
+  const approvalBreakdown: ApprovalBreakdown = {
+    pending: pendingCount,
+    approved: approvedCount,
+    rejected: rejectedCount,
+    managerOnly: managerOnlyCount,
+    managerFinance: managerFinanceCount,
+  };
 
   return {
     quotations: open.data ?? [],
     baselines,
+    approvalBreakdown,
     error: failure?.message ?? null,
   };
 }

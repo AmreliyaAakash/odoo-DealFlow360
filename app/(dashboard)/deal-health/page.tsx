@@ -28,31 +28,17 @@ export default async function DealHealthPage() {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
-      <PageHeader
-        title="Deal health"
-        caption="Live view of open quotations"
-        badge="Realtime"
-      />
-
       {data.error ? (
-        <Notice>Could not load quotations: {data.error}</Notice>
+        <Notice tone="danger">Could not load quotations: {data.error}</Notice>
       ) : null}
 
-      <Panel delay={80}>
-        <PanelHeader
-          icon={HeartbeatIcon}
-          title="Open deals"
-          caption={`${flagged} open · flags recompute as rows change`}
-          href="/quotations"
-        />
-        <div className="mt-3">
-          <DealHealthTable
-            initial={data.quotations}
-            baselines={data.baselines}
-            canAct={canWith(access, "dealHealth", "write")}
-          />
-        </div>
-      </Panel>
+      <DealHealthTable
+        initial={data.quotations}
+        baselines={data.baselines}
+        approvalBreakdown={data.approvalBreakdown}
+        canAct={canWith(access, "dealHealth", "write")}
+        role={role}
+      />
     </main>
   );
 }

@@ -932,6 +932,8 @@ export type DealHealthQuotation = {
   id: string;
   reference: string | null;
   status: string | null;
+  customer_name?: string | null;
+  customer?: { name: string | null } | null;
   rep_id?: string | null;
   net_total: number | null;
   margin_total: number | null;

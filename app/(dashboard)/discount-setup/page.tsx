@@ -51,12 +51,34 @@ export default async function DiscountSetupPage() {
   const actor = await requireModule("discountRules");
   const supabase = createServerSupabaseClient();
 
-  const { data, error } = await supabase
-    .from("discount_rules")
-    .select("id, name, scope, scope_ref, customer_tier, max_discount_pct, approval_level")
-    .eq("active", true)
-    .order("max_discount_pct", { ascending: true })
-    .returns<RuleRow[]>();
+  const rulesPromise = (async () => {
+    const res = await supabase
+      .from("discount_rules")
+      .select("id, name, scope, scope_ref, customer_tier, max_discount_pct, approval_level")
+      .eq("active", true)
+      .order("max_discount_pct", { ascending: true })
+      .returns<RuleRow[]>();
+
+    if (!res.error) return res;
+
+    const fallback = await supabase
+      .from("discount_rules")
+      .select("id, name, scope, scope_ref, max_discount_pct, approval_level")
+      .eq("active", true)
+      .order("max_discount_pct", { ascending: true });
+
+    if (fallback.error || !fallback.data) return res;
+
+    return {
+      data: (fallback.data as any[]).map((r) => ({
+        ...r,
+        customer_tier: null,
+      })) as RuleRow[],
+      error: null,
+    };
+  })();
+
+  const { data, error } = await rulesPromise;
 
   const rules = data ?? [];
 

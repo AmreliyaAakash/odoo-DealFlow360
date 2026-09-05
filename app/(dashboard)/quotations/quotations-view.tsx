@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ReceiptIcon, SquaresFourIcon, RowsIcon } from "@phosphor-icons/react";
+import { ArrowsClockwiseIcon, ReceiptIcon, SquaresFourIcon, RowsIcon } from "@phosphor-icons/react";
 import { formatCurrency } from "@/lib/quotations";
 import { statusColor, statusLabel } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -55,21 +56,42 @@ export function QuotationsView({
   deals: PipelineDeal[];
   caption: string;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<"board" | "table">("board");
+  const [reloading, setReloading] = useState(false);
+
+  function handleReload() {
+    setReloading(true);
+    router.refresh();
+    setTimeout(() => setReloading(false), 600);
+  }
 
   return (
     <>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] text-muted-foreground">{caption}</p>
 
-        <button
-          type="button"
-          onClick={() => setView(view === "board" ? "table" : "board")}
-          className="flex h-8 items-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-medium transition-colors hover:bg-muted/70"
-        >
-          {view === "board" ? <RowsIcon size={13} /> : <SquaresFourIcon size={13} />}
-          {view === "board" ? "Switch to table view" : "Switch to board view"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleReload}
+            disabled={reloading}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted disabled:opacity-50"
+            title="Reload live quotation and stock data"
+          >
+            <ArrowsClockwiseIcon size={13} className={reloading ? "animate-spin" : ""} />
+            Reload Data
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setView(view === "board" ? "table" : "board")}
+            className="flex h-8 items-center gap-1.5 rounded-lg bg-muted px-3 text-xs font-medium transition-colors hover:bg-muted/70"
+          >
+            {view === "board" ? <RowsIcon size={13} /> : <SquaresFourIcon size={13} />}
+            {view === "board" ? "Switch to table view" : "Switch to board view"}
+          </button>
+        </div>
       </div>
 
       {view === "board" ? <Board deals={deals} /> : <Table deals={deals} />}
