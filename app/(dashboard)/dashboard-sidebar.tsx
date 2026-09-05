@@ -454,7 +454,7 @@ export function DashboardSidebar({
         // Never `hidden`: a narrow screen gets the rail, not nothing. The width
         // is the only thing that animates — transitioning layout properties on
         // the children as well makes the whole column shudder rather than glide.
-        "sticky top-4 flex max-h-[calc(100vh-2rem)] shrink-0 flex-col self-start rounded-xl bg-card p-3 ring-1 ring-foreground/10",
+        "sticky top-4 flex shrink-0 flex-col self-start rounded-xl bg-card p-3 ring-1 ring-foreground/10",
         "transition-[width] duration-300 ease-in-out motion-reduce:transition-none",
         view.width,
       )}
@@ -500,10 +500,7 @@ export function DashboardSidebar({
         <CaretRightIcon size={14} weight="bold" />
       </button>
 
-      {/* The one scrolling region. Without it the tail of a long nav is simply
-          clipped by the sticky column's max height — there is no pipeline rail
-          below it on an admin or finance desk to carry a scrollbar of its own. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-col">
         <nav className="mt-3 flex flex-col gap-0.5">
           {items.map((item) => (
             <NavLink
