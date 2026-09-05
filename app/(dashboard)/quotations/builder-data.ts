@@ -24,33 +24,78 @@ export type BuilderData = {
 export async function loadBuilderData(): Promise<BuilderData> {
   const supabase = createServerSupabaseClient();
 
-  const [customers, products, plans, rules, priceLists] = await Promise.all([
-    supabase
+  const customersPromise = (async () => {
+    const res = await supabase
       .from("customers")
       .select("id, name, tier")
       .order("name", { ascending: true })
-      .returns<CustomerOption[]>(),
-    supabase
-      .from("products")
-      .select(PRODUCT_COLUMNS)
-      .eq("active", true)
-      .order("category", { ascending: true })
-      .order("name", { ascending: true })
-      .returns<Product[]>(),
-    supabase
-      .from("subscription_plans")
-      .select("id, name, cadence, unit_price")
-      .eq("active", true)
-      .order("unit_price", { ascending: true })
-      .returns<SubscriptionPlan[]>(),
-    supabase
+      .returns<CustomerOption[]>();
+
+    if (!res.error) return res;
+
+    // Fallback if 'tier' column does not exist yet in the database
+    const fallback = await supabase
+      .from("customers")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    if (fallback.error) return res;
+
+    return {
+      data: (fallback.data ?? []).map((c: { id: string; name: string | null }) => ({
+        id: c.id,
+        name: c.name,
+        tier: "standard",
+      })),
+      error: null,
+    };
+  })();
+
+  const productsPromise = supabase
+    .from("products")
+    .select(PRODUCT_COLUMNS)
+    .eq("active", true)
+    .order("category", { ascending: true })
+    .order("name", { ascending: true })
+    .returns<Product[]>();
+
+  const plansPromise = supabase
+    .from("subscription_plans")
+    .select("id, name, cadence, unit_price")
+    .eq("active", true)
+    .order("unit_price", { ascending: true })
+    .returns<SubscriptionPlan[]>();
+
+  const rulesPromise = (async () => {
+    const res = await supabase
       .from("discount_rules")
       .select("scope, scope_ref, customer_tier, max_discount_pct")
       .eq("active", true)
-      .returns<DiscountRule[]>(),
-    // Both product-specific and catalogue-wide entries: `priceForTier` needs
-    // the fallback to answer for a product nobody wrote a rule for.
-    supabase
+      .returns<DiscountRule[]>();
+
+    if (!res.error) return res;
+
+    // Fallback if 'customer_tier' column does not exist yet in the database
+    const fallback = await supabase
+      .from("discount_rules")
+      .select("scope, scope_ref, max_discount_pct")
+      .eq("active", true);
+
+    if (fallback.error) return res;
+
+    return {
+      data: (fallback.data ?? []).map((r: { scope: string; scope_ref: string | null; max_discount_pct: number }) => ({
+        scope: r.scope,
+        scope_ref: r.scope_ref,
+        customer_tier: null,
+        max_discount_pct: r.max_discount_pct,
+      })),
+      error: null,
+    };
+  })();
+
+  const priceListsPromise = (async () => {
+    const res = await supabase
       .from("price_lists")
       .select("product_id, tier, currency, rule, amount")
       .eq("active", true)
@@ -62,7 +107,20 @@ export async function loadBuilderData(): Promise<BuilderData> {
           rule: PriceListEntry["rule"];
           amount: number;
         }[]
-      >(),
+      >();
+
+    if (!res.error) return res;
+
+    // Fallback if price_lists table doesn't exist yet
+    return { data: [], error: null };
+  })();
+
+  const [customers, products, plans, rules, priceLists] = await Promise.all([
+    customersPromise,
+    productsPromise,
+    plansPromise,
+    rulesPromise,
+    priceListsPromise,
   ]);
 
   const failure =

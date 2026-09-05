@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { UserButton } from "@clerk/nextjs";
 import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { PORTAL_STAGE_LABELS } from "@/lib/business-logic";
@@ -34,11 +35,30 @@ export default async function PortalQuotePage({
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center gap-3">
-        <span className="flex size-7 items-center justify-center rounded-md bg-sky-500 text-[11px] font-bold text-white">
-          D
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold tracking-tight">DealFlow360</p>
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 p-1.5 shadow-sm dark:bg-zinc-100">
+            <Image
+              src="/icon.png"
+              alt="DealFlow360 Icon"
+              width={24}
+              height={24}
+              className="size-5.5 object-contain invert dark:invert-0"
+              priority
+            />
+          </div>
+          <Image
+            src="/logo.png"
+            alt="DealFlow360"
+            width={150}
+            height={28}
+            className="h-6 w-auto object-contain dark:invert"
+            priority
+          />
+        </div>
+        <div className="min-w-0 pl-3 border-l border-border">
+          <p className="text-xs font-semibold text-foreground">
+            Customer Portal
+          </p>
           <p className="text-[11px] text-muted-foreground">
             {quote.customerName}
           </p>

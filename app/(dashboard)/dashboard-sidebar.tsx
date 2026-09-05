@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
@@ -302,23 +303,37 @@ export function DashboardSidebar({
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col self-start rounded-xl bg-card p-3 ring-1 ring-foreground/10 lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)]">
-      <Link href={workspace.home} className="flex items-center gap-2 px-2 py-2">
-        <span
-          className={cn(
-            "flex size-6 items-center justify-center rounded-md text-[11px] font-bold text-white",
-            workspace.logo,
-          )}
-        >
-          D
-        </span>
-        <span className="text-sm font-semibold tracking-tight">DealFlow360</span>
+      <Link
+        href={workspace.home}
+        className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/40"
+      >
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 p-1.5 shadow-sm dark:bg-zinc-100">
+          <Image
+            src="/icon.png"
+            alt="DealFlow360 Icon"
+            width={24}
+            height={24}
+            className="size-5.5 object-contain invert dark:invert-0"
+            priority
+          />
+        </div>
+        <Image
+          src="/logo.png"
+          alt="DealFlow360"
+          width={150}
+          height={28}
+          className="h-6 w-auto object-contain dark:invert"
+          priority
+        />
       </Link>
 
       <nav className="mt-3 flex flex-col gap-0.5">
         {items.map((item) => {
-          const active =
-            pathname === item.href ||
-            (item.prefix ? pathname.startsWith(item.prefix) : false);
+          const isExact = pathname === item.href;
+          const isPrefix = item.prefix
+            ? pathname.startsWith(item.prefix)
+            : item.href !== workspace.home && pathname.startsWith(`${item.href}/`);
+          const active = isExact || isPrefix;
           const Icon = item.icon;
 
           return (

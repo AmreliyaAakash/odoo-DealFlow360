@@ -76,6 +76,7 @@ export async function POST(request: Request) {
   let payload: {
     customerId?: unknown;
     reference?: unknown;
+    notes?: unknown;
     lines?: unknown;
     submit?: unknown;
   };
@@ -85,12 +86,15 @@ export async function POST(request: Request) {
     payload = {};
   }
 
-  const { customerId, reference } = payload;
+  const { customerId, reference, notes } = payload;
   if (customerId !== undefined && customerId !== null && typeof customerId !== "string") {
     return NextResponse.json({ error: "customerId must be a string" }, { status: 400 });
   }
   if (reference !== undefined && reference !== null && typeof reference !== "string") {
     return NextResponse.json({ error: "reference must be a string" }, { status: 400 });
+  }
+  if (notes !== undefined && notes !== null && typeof notes !== "string") {
+    return NextResponse.json({ error: "notes must be a string" }, { status: 400 });
   }
 
   // `lines` is optional: the pipeline's quick-create raises an empty draft, the
@@ -143,12 +147,13 @@ export async function POST(request: Request) {
       rep_id: actor.userId,
       customer_id: customerId ?? null,
       reference: reference ?? null,
+      notes: typeof notes === "string" ? notes.trim() || null : null,
       status,
       submitted_by: submit ? actor.userId : null,
       submitted_at: submit ? new Date().toISOString() : null,
       ...(priced ? summaryColumns(priced.summary, priced.approvals) : {}),
     })
-    .select("id, reference, status, rep_id, customer_id")
+    .select("id, reference, status, rep_id, customer_id, notes")
     .single();
 
   if (error) {

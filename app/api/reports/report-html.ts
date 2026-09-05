@@ -201,7 +201,7 @@ export function renderReportHtml(
 
   <div class="sheet">
     <header>
-      <div class="mark">D</div>
+      <div class="mark"><img src="/icon.png" style="width:22px;height:22px;object-fit:contain;filter:invert(1);" alt="Icon" /></div>
       <div>
         <h1>Quotation report</h1>
         <p class="sub">DealFlow360 · ${escapeHtml(periodLabel(filters.period))}</p>

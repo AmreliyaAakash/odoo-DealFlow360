@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -157,11 +158,29 @@ export default async function DiagnosticsPage() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-6">
-      <header>
-        <h1 className="text-base font-semibold tracking-tight">Setup check</h1>
-        <p className="text-xs text-muted-foreground">
-          Walks the chain from Clerk to Postgres and reports the first broken link.
-        </p>
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Image
+            src="/icon.png"
+            alt="DealFlow360 Icon"
+            width={24}
+            height={24}
+            className="size-6 object-contain dark:invert"
+          />
+          <Image
+            src="/logo.png"
+            alt="DealFlow360"
+            width={110}
+            height={22}
+            className="h-4.5 w-auto object-contain dark:invert"
+          />
+        </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight">Setup check</h1>
+          <p className="text-xs text-muted-foreground">
+            Walks the chain from Clerk to Postgres and reports the first broken link.
+          </p>
+        </div>
       </header>
       {children}
     </main>

@@ -59,6 +59,7 @@ type DecisionRow = {
 type QuotationRow = {
   id: string;
   reference: string | null;
+  notes: string | null;
   status: string | null;
   rep_id: string;
   customer_id: string | null;
@@ -93,18 +94,53 @@ export default async function QuotationPage({
   const actor = await requireBuilderAccess();
   const supabase = createServerSupabaseClient();
 
-  const [quotationResult, decisionsResult, data] = await Promise.all([
-    supabase
+  const quotationPromise = (async () => {
+    const res = await supabase
       .from("quotations")
       .select(
-        `id, reference, status, rep_id, customer_id, submitted_at,
+        `id, reference, notes, status, rep_id, customer_id, submitted_at,
          net_total, margin_total, discount_total, risk_score, required_approvals,
          customers(id, name, tier),
          quotation_lines(id, product_id, qty, discount_pct, unit_price,
                          subscription_plan_id)`,
       )
       .eq("id", id)
-      .maybeSingle<QuotationRow>(),
+      .maybeSingle<QuotationRow>();
+
+    if (!res.error) return res;
+
+    // Fallback if 'tier' or 'subscription_plan_id' columns don't exist yet
+    const fallback = await supabase
+      .from("quotations")
+      .select(
+        `id, reference, notes, status, rep_id, customer_id, submitted_at,
+         net_total, margin_total, discount_total, risk_score, required_approvals,
+         customers(id, name),
+         quotation_lines(id, product_id, qty, discount_pct, unit_price)`,
+      )
+      .eq("id", id)
+      .maybeSingle<any>();
+
+    if (fallback.error || !fallback.data) return res;
+
+    const row = fallback.data;
+    const formatted: QuotationRow = {
+      ...row,
+      notes: row.notes ?? null,
+      customers: row.customers
+        ? { id: row.customers.id, name: row.customers.name, tier: "standard" }
+        : null,
+      quotation_lines: (row.quotation_lines ?? []).map((l: any) => ({
+        ...l,
+        subscription_plan_id: null,
+      })),
+    };
+
+    return { data: formatted, error: null };
+  })();
+
+  const [quotationResult, decisionsResult, data] = await Promise.all([
+    quotationPromise,
     supabase
       .from("approvals")
       .select("id, level, action, reason, decided_by, decided_at")
@@ -192,6 +228,7 @@ export default async function QuotationPage({
     id: quotation.id,
     customerId: quotation.customer_id,
     reference: quotation.reference,
+    notes: quotation.notes,
     status,
     lines: quotation.quotation_lines.map((line) => ({
       productId: line.product_id,
@@ -313,6 +350,17 @@ function ReadOnlyLines({
   return (
     <>
       <Notice>{reason}</Notice>
+
+      {quotation.notes ? (
+        <Panel>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+            Description / Notes
+          </p>
+          <p className="mt-1 text-xs text-foreground whitespace-pre-wrap">
+            {quotation.notes}
+          </p>
+        </Panel>
+      ) : null}
 
       <Panel>
         <PanelHeader

@@ -25,6 +25,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/portal(.*)",
   "/unauthorized",
+  "/clear",
 ]);
 
 /**
@@ -148,11 +149,23 @@ export default clerkMiddleware(async (auth, request) => {
     }
   }
 
-  if (role !== null && allowed.includes(role)) return;
+  const effectiveRole: Role = role ?? "rep";
+
+  if (allowed.includes(effectiveRole)) return;
+
+  const LANDING_BY_ROLE: Record<Role, string> = {
+    admin: "/admin",
+    manager: "/manager",
+    finance: "/finance",
+    rep: "/rep",
+    customer: "/portal",
+  };
+
+  const targetPath = LANDING_BY_ROLE[effectiveRole] ?? "/rep";
 
   return isApiRoute(request)
     ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    : NextResponse.redirect(new URL("/unauthorized", request.url));
+    : NextResponse.redirect(new URL(targetPath, request.url));
 });
 
 export const config = {

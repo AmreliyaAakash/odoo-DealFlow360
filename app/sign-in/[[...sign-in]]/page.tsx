@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import AnimatedCharacters from "@/components/AnimatedCharacters";
@@ -66,11 +67,26 @@ export default function SignInPage() {
       {/* RIGHT 50% FULL SCREEN PANEL: Clerk Auth Form & Header */}
       <div className="w-full lg:w-1/2 lg:min-h-screen bg-white text-slate-900 flex flex-col justify-between p-6 sm:p-10 lg:p-14">
         <div className="w-full max-w-sm mx-auto my-auto flex flex-col items-center">
-          {/* Top Star Logo */}
-          <div className="mb-4 sm:mb-6 flex items-center justify-center">
-            <svg viewBox="0 0 36 36" className="w-9 h-9 sm:w-10 sm:h-10 text-slate-900 fill-current">
-              <path d="M18 0 C18 10, 26 18, 36 18 C26 18, 18 26, 18 36 C18 26, 10 18, 0 18 C10 18, 18 10, 18 0 Z" />
-            </svg>
+          {/* Top Brand Logo */}
+          <div className="mb-6 flex flex-col items-center justify-center gap-3">
+            <div className="flex size-14 items-center justify-center rounded-2xl bg-zinc-950 p-2.5 shadow-md">
+              <Image
+                src="/icon.png"
+                alt="DealFlow360 Icon"
+                width={48}
+                height={48}
+                className="size-9 object-contain invert"
+                priority
+              />
+            </div>
+            <Image
+              src="/logo.png"
+              alt="DealFlow360"
+              width={220}
+              height={40}
+              className="h-8.5 w-auto object-contain"
+              priority
+            />
           </div>
 
           {/* Title & Subtitle */}

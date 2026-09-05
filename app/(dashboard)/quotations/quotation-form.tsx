@@ -61,6 +61,7 @@ export type QuotationDraft = {
   reference: string | null;
   /** Current status, so the form can say what saving will actually do. */
   status?: string | null;
+  notes?: string | null;
   lines: {
     productId: string;
     qty: number;
@@ -147,6 +148,7 @@ export function QuotationForm({
   );
   const [customerTouched, setCustomerTouched] = useState(false);
   const [reference, setReference] = useState(draft?.reference ?? "");
+  const [notes, setNotes] = useState(draft?.notes ?? "");
   const [lines, setLines] = useState<FormLine[]>(() =>
     draft && draft.lines.length > 0
       ? draft.lines.map((line) => ({
@@ -366,6 +368,7 @@ export function QuotationForm({
     const body = {
       customerId,
       reference: reference.trim() || null,
+      notes: notes.trim() || null,
       submit: action === "submit",
       lines: lines.map((line) => {
         const product = productsById.get(line.productId as string) as Product;
@@ -481,7 +484,7 @@ export function QuotationForm({
             />
           </Field>
 
-          <Field label="Tier" className="w-32">
+          <Field label="Tier" className="w-28">
             <div className="flex h-8 items-center">
               {customerId ? (
                 <TierBadge tier={tier} />
@@ -489,6 +492,15 @@ export function QuotationForm({
                 <span className="text-xs text-muted-foreground">—</span>
               )}
             </div>
+          </Field>
+
+          <Field label="Description / Notes" className="flex-1 min-w-[260px]">
+            <input
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Quotation description, terms, or notes…"
+              className="h-8 w-full rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500"
+            />
           </Field>
         </div>
       </Panel>

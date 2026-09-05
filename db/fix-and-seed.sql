@@ -53,11 +53,11 @@ create or replace function clerk_role() returns text
 
 -- The five demo accounts.
 insert into user_roles (clerk_user_id, email, role) values
-  ('user_3IuQrhB9aEzK2d2qndRwqeMgvmB', 'codex9600@gmail.com',         'admin'),
-  ('user_3Iu6aE3DrFFtWp8WfedpZFlNl0q', 'amreliyaaakash3@gmail.com',   'manager'),
-  ('user_3IuBz8yfG8nxrMESeoGoWT8pbxU', 'amreliyaaakash05@gmail.com',  'finance'),
-  ('user_3ItkOpahZQEH2da0kwZVm5s8CLk', 'aakashamreliya905@gmail.com', 'rep'),
-  ('user_3Iu4JMClzjB6AZS4StY4pFkauyk', 'localweb0303@gmail.com',      'customer')
+  ('user_3IultTL48GGtWIpJc0L1J6seSjJ', 'codex9600@gmail.com',         'admin'),
+  ('user_3IultXcWKboyb3nd7XbZEx2LT8P', 'amreliyaaakash3@gmail.com',   'manager'),
+  ('user_3IulthkJ0DDkWBZBFvinAcJUYOT', 'amreliyaaakash05@gmail.com',  'finance'),
+  ('user_3Iults9qo2lsKSNujOxoc1EeMuz', 'aakashamreliya905@gmail.com', 'rep'),
+  ('user_3Iu31Z3mBQpycDzHMH8pj5pHQqq', 'localweb0303@gmail.com',      'customer')
 on conflict (clerk_user_id) do update
   set role = excluded.role, email = excluded.email, updated_at = now();
 
@@ -66,20 +66,20 @@ on conflict (clerk_user_id) do update
 -- Gives the customer account a customers row, so /portal has something to open.
 
 update customers
-   set portal_user_id = 'user_3Iu4JMClzjB6AZS4StY4pFkauyk'
+   set portal_user_id = 'user_3Iu31Z3mBQpycDzHMH8pj5pHQqq'
  where name = 'Northwind Logistics'
    and (portal_user_id is null
-        or portal_user_id = 'user_3Iu4JMClzjB6AZS4StY4pFkauyk');
+        or portal_user_id = 'user_3Iu31Z3mBQpycDzHMH8pj5pHQqq');
 
 
 -- ============================================================ 3. demo pipeline
 
 do $$
 declare
-  v_rep      text := 'user_3ItkOpahZQEH2da0kwZVm5s8CLk';
-  v_manager  text := 'user_3Iu6aE3DrFFtWp8WfedpZFlNl0q';
-  v_finance  text := 'user_3IuBz8yfG8nxrMESeoGoWT8pbxU';
-  v_admin    text := 'user_3IuQrhB9aEzK2d2qndRwqeMgvmB';
+  v_rep      text := 'user_3Iults9qo2lsKSNujOxoc1EeMuz';
+  v_manager  text := 'user_3IultXcWKboyb3nd7XbZEx2LT8P';
+  v_finance  text := 'user_3IulthkJ0DDkWBZBFvinAcJUYOT';
+  v_admin    text := 'user_3IultTL48GGtWIpJc0L1J6seSjJ';
   v_cust     uuid;
   v_quote    uuid;
   v_prod     record;
