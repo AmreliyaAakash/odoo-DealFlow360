@@ -25,7 +25,7 @@ const SETTLED_STATUSES = ["won", "lost"];
 const BASELINE_WINDOW = 200;
 
 export const DEAL_HEALTH_SELECT =
-  `id, reference, status, rep_id, customer_name, customer_id, customer:customers(name), net_total, margin_total, max_discount_pct,
+  `id, reference, status, rep_id, customer_id, customer:customers(name), net_total, margin_total, max_discount_pct,
    updated_at, submitted_at, valid_until`;
 
 export type ApprovalBreakdown = {
