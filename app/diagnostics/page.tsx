@@ -159,20 +159,22 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-6">
       <header className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Image
-            src="/icon.png"
-            alt="DealFlow360 Icon"
-            width={24}
-            height={24}
-            className="size-6 object-contain dark:invert"
-          />
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-950 p-2 shadow-xs dark:bg-zinc-100">
+            <Image
+              src="/icon.png"
+              alt="DealFlow360 Icon"
+              width={28}
+              height={28}
+              className="size-5.5 object-contain invert dark:invert-0"
+            />
+          </div>
           <Image
             src="/logo.png"
             alt="DealFlow360"
-            width={110}
-            height={22}
-            className="h-4.5 w-auto object-contain dark:invert"
+            width={180}
+            height={32}
+            className="h-[28px] w-auto object-contain dark:invert"
           />
         </div>
         <div>
