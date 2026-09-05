@@ -32,6 +32,7 @@ type QuoteRow = {
   subtotal: number | null;
   discount_total: number | null;
   net_total: number | null;
+  max_discount_pct: number | null;
   submitted_at: string | null;
   created_at: string | null;
   customers: { name: string | null } | null;
@@ -62,7 +63,7 @@ export async function loadPortalQuote(
       .from("quotations")
       .select(
         `id, customer_id, reference, status, notes, valid_until, subtotal, discount_total, net_total,
-         submitted_at, created_at,
+         max_discount_pct, submitted_at, created_at,
          customers(name),
          quotation_lines(id, qty, discount_pct, unit_price,
                          products(name, category, sku, cadence))`,
@@ -139,6 +140,12 @@ export async function loadPortalQuote(
       customerName: row.customers?.name ?? "Your organisation",
       stage,
       closedLost: isQuoteClosedLost(row.status),
+      // Only an approved quotation is the customer'"'"'s to accept: anything else is
+      // still ours to finish, and offering the button would promise otherwise.
+      canConfirm: row.status === "approved",
+      awaitingDesk: row.status === "pending_approval",
+      settled: row.status === "won",
+      maxDiscountPct: Number(row.max_discount_pct ?? 0),
       validUntil: row.valid_until,
       notes: row.notes,
       subtotal: Number(row.subtotal ?? 0),

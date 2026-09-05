@@ -38,6 +38,7 @@ import {
   type SelectOption,
 } from "@/components/dashboard/searchable-select";
 import { TierBadge } from "@/components/dashboard/tier-badge";
+import { UpsellPanel } from "@/components/UpsellPanel";
 
 export type CustomerOption = { id: string; name: string | null; tier: string | null };
 
@@ -91,6 +92,18 @@ const freshLine = (): FormLine => ({
   touched: {},
 });
 
+/** The opening row: blank, or already holding the product the rep arrived with. */
+function seedLine(catalog: Product[], productId?: string): FormLine {
+  const line = freshLine();
+  const product = productId
+    ? catalog.find((candidate) => candidate.id === productId)
+    : undefined;
+
+  return product
+    ? { ...line, productId: product.id, unitPrice: product.list_price }
+    : line;
+}
+
 /**
  * B3 — the quotation builder, used to raise a quote at /quotations/new and to
  * edit an unsubmitted one at /quotations/[id].
@@ -105,12 +118,15 @@ export function QuotationForm({
   plans,
   discountRules,
   draft,
+  initialProductId,
 }: {
   customers: CustomerOption[];
   catalog: Product[];
   plans: SubscriptionPlan[];
   discountRules: DiscountRule[];
   draft?: QuotationDraft;
+  /** Seeds the first line, for arriving from a suggestion. New quotes only. */
+  initialProductId?: string;
 }) {
   const router = useRouter();
   const editing = draft !== undefined;
@@ -131,7 +147,7 @@ export function QuotationForm({
           subscriptionPlanId: line.subscriptionPlanId,
           touched: {},
         }))
-      : [freshLine()],
+      : [seedLine(catalog, initialProductId)],
   );
 
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
@@ -182,19 +198,25 @@ export function QuotationForm({
     [plans],
   );
 
-  /** Live totals. Client-side only — the server re-prices whatever is saved. */
-  const summary = useMemo(() => {
-    const priceable: QuotationLineInput[] = lines
-      .filter((line) => line.productId !== null)
-      .map((line) => ({
-        productId: line.productId as string,
-        qty: line.qty,
-        discountPct: line.discountPct,
-        unitPrice: line.unitPrice,
-      }));
+  /** The lines that can actually be priced: a row with no product yet cannot. */
+  const priceable = useMemo<QuotationLineInput[]>(
+    () =>
+      lines
+        .filter((line) => line.productId !== null)
+        .map((line) => ({
+          productId: line.productId as string,
+          qty: line.qty,
+          discountPct: line.discountPct,
+          unitPrice: line.unitPrice,
+        })),
+    [lines],
+  );
 
-    return summarize(priceable, productsById);
-  }, [lines, productsById]);
+  /** Live totals. Client-side only — the server re-prices whatever is saved. */
+  const summary = useMemo(
+    () => summarize(priceable, productsById),
+    [priceable, productsById],
+  );
 
   const lineErrors = useMemo(() => lines.map(validateLine), [lines]);
 
@@ -229,6 +251,37 @@ export function QuotationForm({
   function addLine() {
     setVerdict(null);
     setLines((current) => [...current, freshLine()]);
+  }
+
+  /**
+   * Drops a suggested product into the cart at list price.
+   *
+   * It fills the first empty line before appending, so accepting a suggestion on
+   * a fresh quote does not leave a blank row above it. The totals update on the
+   * same render because they are derived from the lines rather than refetched —
+   * which is what makes the margin the panel promised and the running total on
+   * screen agree.
+   */
+  function addSuggestion(productId: string) {
+    const product = productsById.get(productId);
+    if (!product) return;
+
+    setVerdict(null);
+    setLines((current) => {
+      const added: FormLine = {
+        ...freshLine(),
+        productId,
+        unitPrice: product.list_price,
+        touched: { product: true },
+      };
+
+      const blank = current.findIndex((row) => row.productId === null);
+      if (blank === -1) return [...current, added];
+
+      return current.map((row, index) =>
+        index === blank ? { ...added, key: row.key } : row,
+      );
+    });
   }
 
   function removeLine(key: string) {
@@ -359,7 +412,11 @@ export function QuotationForm({
         </div>
       </Panel>
 
-      <Panel delay={80}>
+      {/* Cart and suggestions side by side on a wide screen, stacked below it.
+          The panel belongs next to the lines, not on a page of its own: its
+          whole value is being visible while the rep is still choosing. */}
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <Panel delay={80} className="min-w-0">
         <PanelHeader
           icon={ReceiptIcon}
           title="Line items"
@@ -397,6 +454,9 @@ export function QuotationForm({
           Add line
         </button>
       </Panel>
+
+        <UpsellPanel lines={priceable} onAddToQuote={addSuggestion} />
+      </div>
 
       <Panel delay={160}>
         <div className="flex flex-wrap items-center justify-between gap-4">

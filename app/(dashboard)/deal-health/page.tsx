@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/ssr";
 import { currentUser } from "@/lib/auth";
-import type { DealHealthQuotation } from "@/lib/business-logic";
-import { canWith, effectiveAccess } from "@/lib/permissions-server";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { loadDealHealth } from "@/lib/deal-health-server";
+import { canWith, effectiveAccess, scopeWith } from "@/lib/permissions-server";
 import { Notice, PageHeader, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { DealHealthTable } from "./deal-health-table";
 
@@ -19,17 +18,13 @@ export default async function DealHealthPage() {
   const { access } = await effectiveAccess(userId, role);
   if (!canWith(access, "dealHealth", "view")) redirect("/unauthorized");
 
-  const supabase = createServerSupabaseClient();
+  // A rep watches their own deals; a manager watches the desk. The same scope
+  // rule the pipeline applies, so the two screens cannot disagree about what
+  // "open" means for this account.
+  const scope = scopeWith(access, "dealHealth");
+  const data = await loadDealHealth(scope === "own" ? userId : null);
 
-  const { data, error } = await supabase
-    .from("quotations")
-    .select(
-      "id, reference, status, net_total, margin_total, max_discount_pct, updated_at, submitted_at",
-    )
-    .in("status", ["draft", "pending_approval", "approved"])
-    .order("updated_at", { ascending: false })
-    .limit(100)
-    .returns<DealHealthQuotation[]>();
+  const flagged = data.quotations.length;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
@@ -39,17 +34,23 @@ export default async function DealHealthPage() {
         badge="Realtime"
       />
 
-      {error ? <Notice>Could not load quotations: {error.message}</Notice> : null}
+      {data.error ? (
+        <Notice>Could not load quotations: {data.error}</Notice>
+      ) : null}
 
       <Panel delay={80}>
         <PanelHeader
           icon={HeartbeatIcon}
           title="Open deals"
-          caption="Rows badge themselves as health signals trip"
+          caption={`${flagged} open · flags recompute as rows change`}
           href="/quotations"
         />
         <div className="mt-3">
-          <DealHealthTable initial={data ?? []} />
+          <DealHealthTable
+            initial={data.quotations}
+            baselines={data.baselines}
+            canAct={canWith(access, "dealHealth", "write")}
+          />
         </div>
       </Panel>
     </main>

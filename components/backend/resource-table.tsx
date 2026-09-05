@@ -247,7 +247,22 @@ export function ResourceTable({
                     {locked ? " (cannot be changed)" : ""}
                   </span>
 
-                  {field.type === "select" && field.options ? (
+                  {field.type === "boolean" ? (
+                    <span className="flex h-8 items-center">
+                      <input
+                        type="checkbox"
+                        checked={draft[field.key] === "true"}
+                        disabled={locked}
+                        onChange={(event) =>
+                          setDraft((d) => ({
+                            ...d,
+                            [field.key]: String(event.target.checked),
+                          }))
+                        }
+                        className="size-4 accent-indigo-500 disabled:opacity-60"
+                      />
+                    </span>
+                  ) : field.type === "select" && field.options ? (
                     <select
                       value={draft[field.key] ?? ""}
                       disabled={locked}
@@ -307,6 +322,10 @@ export function ResourceTable({
 
 function render(row: ResourceRow, field: EntityField): string {
   const value = row[field.key];
+
+  // A flag reads before the empty check: false is an answer, not a blank.
+  if (field.type === "boolean") return value === true || value === "true" ? "Yes" : "No";
+
   if (value === null || value === undefined || value === "") return "—";
 
   if (field.type === "number" && MONEY.has(field.key)) {

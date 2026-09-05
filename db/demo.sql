@@ -325,6 +325,220 @@ values
   ('user_3IuQrhB9aEzK2d2qndRwqeMgvmB', 'Admin', 'users',              'Finance — Aakash Amreliya', 'update', 'role',             'rep',        'finance',    now() - interval '6 days');
 
 -- ============================================================================
+-- Deal-health signals
+--
+-- The flags are computed from the rows rather than stored, so the data has to
+-- make them true. Two things are arranged here that the spec block above does
+-- not cover.
+-- ============================================================================
+
+-- 1. Finance needs a third settled deal before it has a discount baseline at
+--    all: the detector refuses to average two quotations and call it a habit.
+--    With three closed near 20%, its open deals at 30%+ read as the drift they
+--    are, instead of falling back to the absolute threshold and being missed.
+do $$
+declare
+  v_fin   text := 'user_3IuBz8yfG8nxrMESeoGoWT8pbxU';
+  v_cust  uuid;
+  v_prod  record;
+  v_quote uuid;
+begin
+  select id into v_cust from customers where name = 'Vertex Health';
+  select id, list_price, cost into v_prod from products where sku = 'NET-SW48';
+
+  delete from quotations where reference = 'Q-2026-0027';
+
+  insert into quotations (
+    reference, customer_id, rep_id, status, max_discount_pct,
+    subtotal, discount_total, net_total, cost_total, margin_total,
+    valid_until, created_at, updated_at, submitted_by, submitted_at
+  )
+  values (
+    'Q-2026-0027', v_cust, v_fin, 'won', 21,
+    v_prod.list_price * 2,
+    v_prod.list_price * 2 * 0.21,
+    v_prod.list_price * 2 * 0.79,
+    v_prod.cost * 2,
+    v_prod.list_price * 2 * 0.79 - v_prod.cost * 2,
+    (now() - interval '5 days')::date,
+    now() - interval '55 days', now() - interval '55 days',
+    v_fin, now() - interval '55 days'
+  )
+  returning id into v_quote;
+
+  insert into quotation_lines
+    (quotation_id, product_id, qty, discount_pct, unit_price, unit_cost)
+  values (v_quote, v_prod.id, 2, 21, v_prod.list_price, v_prod.cost);
+end $$;
+
+-- 2. A promise that has already passed. Everything the spec block creates is
+--    valid for another 30 days, so without this nothing ever shows the delivery
+--    slippage flag.
+update quotations
+   set valid_until = (now() - interval '6 days')::date
+ where reference in ('Q-2026-0006', 'Q-2026-0021');
+
+-- Chases already filed, so the dashboard shows what acting on an alert leaves
+-- behind rather than only the buttons that do it.
+delete from deal_nudges where actor_name in ('Manager', 'Finance');
+
+insert into deal_nudges
+  (quotation_id, alert, action, note, actor_id, actor_name, created_at)
+select q.id, v.alert, v.action, v.note,
+       'user_3Iu6aE3DrFFtWp8WfedpZFlNl0q', 'Manager',
+       now() - v.ago
+  from quotations q
+  join (values
+    ('Q-2026-0007', 'stalled', 'nudge',
+     'Chased the rep — customer is mid budget cycle.', interval '2 days'),
+    ('Q-2026-0021', 'discount_anomaly', 'escalate',
+     'Depth is well outside the desk norm. Raised with finance.', interval '1 day')
+  ) as v(ref, alert, action, note, ago) on v.ref = q.reference;
+
+-- ============================================================================
+-- Orders, invoices and payments
+--
+-- Raised from the confirmed quotations, following exactly the rule the billing
+-- code follows: one-time lines and recurring lines never share an invoice. The
+-- payments are deliberately uneven — one settled, one part paid, one untouched —
+-- so the ledger has all three states to render rather than a single one.
+--
+-- Only three of the won quotations are ordered. The rest are left alone on
+-- purpose, so the "Raise order" button on a quotation page has something real to
+-- act on during a demo.
+-- ============================================================================
+
+delete from orders where reference like 'ORD-2026-%';
+
+do $$
+declare
+  v_fin   text := 'user_3IuBz8yfG8nxrMESeoGoWT8pbxU';
+  v_quote record;
+  v_order uuid;
+  v_inv   uuid;
+  v_line  record;
+  v_total numeric;
+  v_index int;
+  v_paid  numeric;
+  v_ref   text;
+begin
+  for v_quote in
+    select q.id, q.reference, q.customer_id, q.submitted_at
+      from quotations q
+     where q.status = 'won'
+       and q.reference in ('Q-2026-0012', 'Q-2026-0005', 'Q-2026-0001')
+     order by q.reference
+  loop
+    v_ref := 'ORD-2026-' || right(v_quote.reference, 4);
+
+    insert into orders
+      (quotation_id, customer_id, reference, status, created_by, created_at)
+    values (
+      v_quote.id, v_quote.customer_id, v_ref, 'fulfilling',
+      v_fin, coalesce(v_quote.submitted_at, now())
+    )
+    returning id into v_order;
+
+    -- ---- one-time lines: a single invoice on 30-day terms
+    select coalesce(sum(l.qty * l.unit_price * (1 - l.discount_pct / 100)), 0)
+      into v_total
+      from quotation_lines l
+      join products p on p.id = l.product_id
+     where l.quotation_id = v_quote.id and p.cadence = 'one_time';
+
+    if v_total > 0 then
+      insert into invoices (order_id, reference, kind, due_date, total, issued_at)
+      values (
+        v_order, v_ref || '-INV', 'one_time',
+        (coalesce(v_quote.submitted_at, now()) + interval '30 days')::date,
+        round(v_total, 2), coalesce(v_quote.submitted_at, now())
+      )
+      returning id into v_inv;
+
+      insert into invoice_lines
+        (invoice_id, product_id, description, qty, unit_price, amount)
+      select v_inv, p.id, p.name, l.qty, l.unit_price,
+             round(l.qty * l.unit_price * (1 - l.discount_pct / 100), 2)
+        from quotation_lines l
+        join products p on p.id = l.product_id
+       where l.quotation_id = v_quote.id and p.cadence = 'one_time';
+
+      -- Paid in full, part paid, or untouched — one of each across the three.
+      v_paid := case v_quote.reference
+                  when 'Q-2026-0001' then round(v_total, 2)
+                  when 'Q-2026-0005' then round(v_total * 0.4, 2)
+                  else 0
+                end;
+
+      if v_paid > 0 then
+        insert into payments
+          (invoice_id, amount, method, reference, recorded_by, recorded_at)
+        values (
+          v_inv, v_paid, 'bank_transfer',
+          'NEFT-' || right(v_quote.reference, 4), v_fin, now() - interval '3 days'
+        );
+
+        update invoices
+           set amount_paid = v_paid,
+               status = case when v_paid >= total then 'paid' else 'part_paid' end
+         where id = v_inv;
+      end if;
+    end if;
+
+    -- ---- recurring lines: one invoice each, covering its own first period.
+    -- Separate invoices because the cadences differ, and one document cannot be
+    -- right about two different periods at once.
+    v_index := 0;
+    for v_line in
+      select l.qty, l.unit_price, l.discount_pct,
+             p.id as product_id, p.name, p.cadence
+        from quotation_lines l
+        join products p on p.id = l.product_id
+       where l.quotation_id = v_quote.id and p.cadence <> 'one_time'
+       order by p.name
+    loop
+      v_index := v_index + 1;
+      v_total := round(
+        v_line.qty * v_line.unit_price * (1 - v_line.discount_pct / 100), 2);
+
+      insert into invoices
+        (order_id, reference, kind, period_start, period_end, due_date, total, issued_at)
+      values (
+        v_order, v_ref || '-SUB' || v_index, 'recurring',
+        coalesce(v_quote.submitted_at, now())::date,
+        (coalesce(v_quote.submitted_at, now())
+          + (case v_line.cadence
+               when 'monthly'   then interval '1 month'
+               when 'quarterly' then interval '3 months'
+               else interval '12 months'
+             end))::date,
+        coalesce(v_quote.submitted_at, now())::date,
+        v_total, coalesce(v_quote.submitted_at, now())
+      )
+      returning id into v_inv;
+
+      insert into invoice_lines
+        (invoice_id, product_id, description, qty, unit_price, amount)
+      values (
+        v_inv, v_line.product_id, v_line.name,
+        v_line.qty, v_line.unit_price, v_total
+      );
+    end loop;
+  end loop;
+end $$;
+
+-- One subscription already cancelled mid-cycle, so the credit-note half of B7 is
+-- visible without anyone having to cancel something first to see it.
+insert into credit_notes
+  (invoice_id, order_id, amount, reason, note, created_by, created_at)
+select i.id, i.order_id, round(i.total * 0.5, 2), 'cancellation',
+       'Quantity 1 to 0 mid-cycle',
+       'user_3IuBz8yfG8nxrMESeoGoWT8pbxU', now() - interval '2 days'
+  from invoices i
+ where i.reference = 'ORD-2026-0001-SUB1';
+
+
+-- ============================================================================
 -- Verification — every line should report a non-zero count, and the per-role
 -- checks below should each return at least one row.
 -- ============================================================================
@@ -341,6 +555,12 @@ union all select 'approvals',            count(*) from approvals
 union all select 'quotation_allocations',count(*) from quotation_allocations
 union all select 'negotiation_messages', count(*) from negotiation_messages
 union all select 'config_audit_log',     count(*) from config_audit_log
+union all select 'deal_nudges',           count(*) from deal_nudges
+union all select 'orders',                count(*) from orders
+union all select 'invoices',              count(*) from invoices
+union all select 'invoice_lines',         count(*) from invoice_lines
+union all select 'payments',              count(*) from payments
+union all select 'credit_notes',          count(*) from credit_notes
 order by table_name;
 
 -- What each role will see.
@@ -365,6 +585,16 @@ union all
 select 'finance: recurring lines',    count(*)::text
   from quotation_lines l join products p on p.id = l.product_id
  where p.cadence <> 'one_time'
+union all
+select 'finance: outstanding invoices', count(*)::text
+  from invoices where status in ('issued','part_paid')
+union all
+select 'finance: recurring invoices',   count(*)::text
+  from invoices where kind = 'recurring'
+union all
+select 'manager: stalled candidates',   count(*)::text
+  from quotations
+ where status = 'pending_approval' and submitted_at < now() - interval '5 days'
 union all
 select 'admin: audit entries',        count(*)::text from config_audit_log
 union all

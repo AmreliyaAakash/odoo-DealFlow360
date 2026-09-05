@@ -61,6 +61,10 @@ create table if not exists products (
   updated_at    timestamptz not null default now()
 );
 
+-- Marked by the desk as currently pushed. The upsell engine ranks a promoted
+-- product above an equally good one that is not.
+alter table products add column if not exists promoted boolean not null default false;
+
 create table if not exists discount_rules (
   id               uuid primary key default gen_random_uuid(),
   name             text not null,
@@ -92,6 +96,12 @@ create table if not exists warehouses (
   active     boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- Relative cost of dispatching one shipment from this site. The split engine
+-- uses it only to break ties between warehouses that cover the same amount of
+-- an order, so leaving it at 1 keeps the old priority-only behaviour.
+alter table warehouses add column if not exists shipping_cost_weight
+  numeric(8,2) not null default 1 check (shipping_cost_weight >= 0);
 
 create table if not exists warehouse_stock (
   warehouse_id uuid not null references warehouses(id) on delete cascade,
@@ -235,6 +245,129 @@ create table if not exists quotation_allocations (
 create index if not exists quotation_allocations_quotation_id_idx
   on quotation_allocations (quotation_id);
 
+-- ============================================================ orders & billing (B7)
+--
+-- Where a quotation stops being a proposal. An order is raised from a confirmed
+-- quotation and owns the money side of it: invoices, what has been paid against
+-- them, and the credit notes that undo a charge without deleting the history of
+-- having made it.
+--
+-- Kept separate from `quotations` rather than folded into its status, because
+-- the two have different lifetimes. A quotation is finished the moment it is
+-- won; the order it produced goes on billing for as long as the subscriptions
+-- on it run.
+
+create table if not exists orders (
+  id           uuid primary key default gen_random_uuid(),
+  -- One order per quotation: raising it twice would bill the customer twice.
+  quotation_id uuid not null unique references quotations(id) on delete cascade,
+  customer_id  uuid references customers(id) on delete set null,
+  reference    text unique,
+  status       text not null default 'open'
+                 check (status in ('open','fulfilling','fulfilled','cancelled')),
+  -- Clerk user ID of whoever raised it.
+  created_by   text not null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists orders_customer_id_idx on orders (customer_id);
+create index if not exists orders_status_idx on orders (status);
+
+-- One invoice per charge. A mixed order produces several: one for the one-time
+-- lines, and one per billing period per subscription — which is what keeps
+-- "billed correctly and separately" true rather than a claim.
+create table if not exists invoices (
+  id           uuid primary key default gen_random_uuid(),
+  order_id     uuid not null references orders(id) on delete cascade,
+  reference    text unique,
+  kind         text not null check (kind in ('one_time','recurring')),
+  -- The period a recurring invoice covers. Null on a one-time invoice, which
+  -- covers a delivery rather than a stretch of time.
+  period_start date,
+  period_end   date,
+  due_date     date,
+  total        numeric(14,2) not null default 0 check (total >= 0),
+  -- Denormalised from `payments`, so a list of invoices needs no join to know
+  -- what is outstanding. Recomputed on every payment.
+  amount_paid  numeric(14,2) not null default 0 check (amount_paid >= 0),
+  status       text not null default 'issued'
+                 check (status in ('draft','issued','part_paid','paid','void')),
+  issued_at    timestamptz not null default now(),
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists invoices_order_id_idx on invoices (order_id);
+create index if not exists invoices_status_idx on invoices (status);
+
+create table if not exists invoice_lines (
+  id          uuid primary key default gen_random_uuid(),
+  invoice_id  uuid not null references invoices(id) on delete cascade,
+  product_id  uuid references products(id) on delete set null,
+  -- Snapshotted, not joined: an invoice must still read correctly after the
+  -- product behind it is renamed or withdrawn.
+  description text not null,
+  qty         numeric(12,2) not null check (qty > 0),
+  unit_price  numeric(12,2) not null,
+  amount      numeric(14,2) not null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists invoice_lines_invoice_id_idx on invoice_lines (invoice_id);
+
+create table if not exists payments (
+  id          uuid primary key default gen_random_uuid(),
+  invoice_id  uuid not null references invoices(id) on delete cascade,
+  amount      numeric(14,2) not null check (amount > 0),
+  method      text not null default 'bank_transfer'
+                check (method in ('bank_transfer','card','cheque','cash','other')),
+  reference   text,
+  -- Clerk user ID of whoever recorded it.
+  recorded_by text not null,
+  recorded_at timestamptz not null default now()
+);
+
+create index if not exists payments_invoice_id_idx on payments (invoice_id);
+
+-- A credit note reverses value without erasing the invoice that created it:
+-- a cancelled subscription, a downgrade mid-cycle, a goodwill adjustment.
+create table if not exists credit_notes (
+  id         uuid primary key default gen_random_uuid(),
+  invoice_id uuid references invoices(id) on delete set null,
+  order_id   uuid not null references orders(id) on delete cascade,
+  amount     numeric(14,2) not null check (amount > 0),
+  reason     text not null
+               check (reason in ('cancellation','downgrade','goodwill','correction')),
+  note       text,
+  created_by text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists credit_notes_order_id_idx on credit_notes (order_id);
+
+-- ============================================================ deal health (B9)
+--
+-- A nudge is the action a manager takes on an alert: a note against the deal
+-- saying it was chased, or escalated to whoever owns the next step. Kept as its
+-- own table rather than folded into approvals, because it is not a decision —
+-- nothing about the quotation changes, and the same deal may be chased twice.
+
+create table if not exists deal_nudges (
+  id           uuid primary key default gen_random_uuid(),
+  quotation_id uuid not null references quotations(id) on delete cascade,
+  -- Which alert prompted it, so the dashboard can show what was acted on.
+  alert        text not null check (alert in ('stalled','discount_anomaly','slipped')),
+  action       text not null check (action in ('nudge','escalate')),
+  note         text,
+  -- Clerk user ID of whoever raised it.
+  actor_id     text not null,
+  actor_name   text,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists deal_nudges_quotation_id_idx
+  on deal_nudges (quotation_id, created_at desc);
+
 -- ============================================================ config audit (A6)
 --
 -- Every change an admin makes to the config tables is written here as one row
@@ -302,6 +435,13 @@ create table if not exists upsell_rules (
   active             boolean not null default true,
   created_at         timestamptz not null default now()
 );
+
+-- Floor on the suggested product's own margin. A rule that would surface a
+-- thin-margin add-on is better not surfaced at all; null falls back to the
+-- engine's default.
+alter table upsell_rules add column if not exists min_margin_pct numeric(5,2)
+  check (min_margin_pct is null or min_margin_pct between 0 and 100);
+
 
 create index if not exists upsell_rules_trigger_product_idx
   on upsell_rules (trigger_product_id);
@@ -471,6 +611,12 @@ alter table approvals               enable row level security;
 alter table negotiation_messages    enable row level security;
 alter table quotation_allocations   enable row level security;
 alter table config_audit_log        enable row level security;
+alter table orders                  enable row level security;
+alter table invoices                enable row level security;
+alter table invoice_lines           enable row level security;
+alter table payments                enable row level security;
+alter table credit_notes            enable row level security;
+alter table deal_nudges             enable row level security;
 alter table role_module_permissions enable row level security;
 alter table user_module_permissions enable row level security;
 alter table user_permission_profiles enable row level security;
@@ -667,6 +813,77 @@ create policy negotiation_messages_insert on negotiation_messages
         ))
     )
   );
+
+-- ------------------------------------------------------------ orders & billing
+
+-- The order side follows the quotation it came from: if you can read the
+-- quotation you can read its order, and only the billing module can write.
+drop policy if exists orders_read on orders;
+create policy orders_read on orders
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists orders_write on orders;
+create policy orders_write on orders
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+drop policy if exists invoices_read on invoices;
+create policy invoices_read on invoices
+  for select using (order_id in (select id from orders));
+
+drop policy if exists invoices_write on invoices;
+create policy invoices_write on invoices
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+drop policy if exists invoice_lines_read on invoice_lines;
+create policy invoice_lines_read on invoice_lines
+  for select using (invoice_id in (select id from invoices));
+
+drop policy if exists invoice_lines_write on invoice_lines;
+create policy invoice_lines_write on invoice_lines
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+-- Payments are readable with their invoice — a customer seeing what they have
+-- already paid is the point — but recording one is finance's alone.
+drop policy if exists payments_read on payments;
+create policy payments_read on payments
+  for select using (invoice_id in (select id from invoices));
+
+drop policy if exists payments_write on payments;
+create policy payments_write on payments
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+drop policy if exists credit_notes_read on credit_notes;
+create policy credit_notes_read on credit_notes
+  for select using (order_id in (select id from orders));
+
+drop policy if exists credit_notes_write on credit_notes;
+create policy credit_notes_write on credit_notes
+  for all
+  using (has_capability('billing', 'write'))
+  with check (has_capability('billing', 'write'));
+
+-- ------------------------------------------------------------ deal nudges
+
+-- Visible with the quotation it chases, and writable by anyone who can act on
+-- the deal-health dashboard. A rep sees nudges against their own deals, which is
+-- the point — being chased is information they need.
+drop policy if exists deal_nudges_read on deal_nudges;
+create policy deal_nudges_read on deal_nudges
+  for select using (quotation_id in (select id from quotations));
+
+drop policy if exists deal_nudges_write on deal_nudges;
+create policy deal_nudges_write on deal_nudges
+  for all
+  using (has_capability('dealHealth', 'write'))
+  with check (has_capability('dealHealth', 'write'));
 
 -- ------------------------------------------------------------ allocations
 
@@ -954,6 +1171,61 @@ insert into upsell_rules (name, trigger_category, suggested_product_id, priority
 select 'Storage → Install & Commissioning', 'Storage', p.id, 30
 from products p where p.sku = 'SVC-INST'
 on conflict (name) do nothing;
+
+-- ============================================================ shipping weights
+--
+-- The split engine only uses these to break ties between warehouses that cover
+-- the same amount of an order, so the numbers are relative, not currency.
+-- Amsterdam is the cheap default; Singapore is the one you reach for last.
+
+update warehouses set shipping_cost_weight = case code
+  when 'AMS' then 1.0
+  when 'FRA' then 1.4
+  when 'DFW' then 2.2
+  when 'SIN' then 3.0
+  else 1.0
+end
+where code in ('AMS','FRA','DFW','SIN');
+
+-- ============================================================ scarcity
+--
+-- Deliberate: with 40 units in Amsterdam every order is filled from one site and
+-- the split engine has nothing to demonstrate. The R650 is made scarce enough
+-- that a normal order has to be spread across warehouses, and scarcer still than
+-- the total demand so a backorder appears and can be consolidated later.
+
+update warehouse_stock ws
+   set available = case w.code
+         when 'AMS' then 4
+         when 'FRA' then 3
+         when 'DFW' then 2
+         else 0
+       end
+  from warehouses w, products p
+ where ws.warehouse_id = w.id
+   and ws.product_id = p.id
+   and p.sku = 'SRV-R650';
+
+-- Premium support is stocked in one place only, so a mixed order shows the
+-- engine choosing a second site for a single line rather than splitting all of them.
+update warehouse_stock ws
+   set available = case w.code when 'FRA' then 50 else 0 end
+  from warehouses w, products p
+ where ws.warehouse_id = w.id
+   and ws.product_id = p.id
+   and p.sku = 'SUB-PRM';
+
+-- ============================================================ promotions
+--
+-- What the desk is pushing this quarter. The upsell panel ranks these above an
+-- equally good suggestion that is not promoted.
+
+update products set promoted = true  where sku in ('SUB-PRM', 'SVC-INST');
+update products set promoted = false where sku not in ('SUB-PRM', 'SVC-INST');
+
+-- A margin floor on the rule that would otherwise surface the thinnest add-on.
+update upsell_rules set min_margin_pct = 25
+ where name = 'Storage → Install & Commissioning';
 
 -- ============================================================================
 -- Demo data — every role has something to look at.
@@ -1282,6 +1554,220 @@ values
   ('user_3IuQrhB9aEzK2d2qndRwqeMgvmB', 'Admin', 'users',              'Finance — Aakash Amreliya', 'update', 'role',             'rep',        'finance',    now() - interval '6 days');
 
 -- ============================================================================
+-- Deal-health signals
+--
+-- The flags are computed from the rows rather than stored, so the data has to
+-- make them true. Two things are arranged here that the spec block above does
+-- not cover.
+-- ============================================================================
+
+-- 1. Finance needs a third settled deal before it has a discount baseline at
+--    all: the detector refuses to average two quotations and call it a habit.
+--    With three closed near 20%, its open deals at 30%+ read as the drift they
+--    are, instead of falling back to the absolute threshold and being missed.
+do $$
+declare
+  v_fin   text := 'user_3IuBz8yfG8nxrMESeoGoWT8pbxU';
+  v_cust  uuid;
+  v_prod  record;
+  v_quote uuid;
+begin
+  select id into v_cust from customers where name = 'Vertex Health';
+  select id, list_price, cost into v_prod from products where sku = 'NET-SW48';
+
+  delete from quotations where reference = 'Q-2026-0027';
+
+  insert into quotations (
+    reference, customer_id, rep_id, status, max_discount_pct,
+    subtotal, discount_total, net_total, cost_total, margin_total,
+    valid_until, created_at, updated_at, submitted_by, submitted_at
+  )
+  values (
+    'Q-2026-0027', v_cust, v_fin, 'won', 21,
+    v_prod.list_price * 2,
+    v_prod.list_price * 2 * 0.21,
+    v_prod.list_price * 2 * 0.79,
+    v_prod.cost * 2,
+    v_prod.list_price * 2 * 0.79 - v_prod.cost * 2,
+    (now() - interval '5 days')::date,
+    now() - interval '55 days', now() - interval '55 days',
+    v_fin, now() - interval '55 days'
+  )
+  returning id into v_quote;
+
+  insert into quotation_lines
+    (quotation_id, product_id, qty, discount_pct, unit_price, unit_cost)
+  values (v_quote, v_prod.id, 2, 21, v_prod.list_price, v_prod.cost);
+end $$;
+
+-- 2. A promise that has already passed. Everything the spec block creates is
+--    valid for another 30 days, so without this nothing ever shows the delivery
+--    slippage flag.
+update quotations
+   set valid_until = (now() - interval '6 days')::date
+ where reference in ('Q-2026-0006', 'Q-2026-0021');
+
+-- Chases already filed, so the dashboard shows what acting on an alert leaves
+-- behind rather than only the buttons that do it.
+delete from deal_nudges where actor_name in ('Manager', 'Finance');
+
+insert into deal_nudges
+  (quotation_id, alert, action, note, actor_id, actor_name, created_at)
+select q.id, v.alert, v.action, v.note,
+       'user_3Iu6aE3DrFFtWp8WfedpZFlNl0q', 'Manager',
+       now() - v.ago
+  from quotations q
+  join (values
+    ('Q-2026-0007', 'stalled', 'nudge',
+     'Chased the rep — customer is mid budget cycle.', interval '2 days'),
+    ('Q-2026-0021', 'discount_anomaly', 'escalate',
+     'Depth is well outside the desk norm. Raised with finance.', interval '1 day')
+  ) as v(ref, alert, action, note, ago) on v.ref = q.reference;
+
+-- ============================================================================
+-- Orders, invoices and payments
+--
+-- Raised from the confirmed quotations, following exactly the rule the billing
+-- code follows: one-time lines and recurring lines never share an invoice. The
+-- payments are deliberately uneven — one settled, one part paid, one untouched —
+-- so the ledger has all three states to render rather than a single one.
+--
+-- Only three of the won quotations are ordered. The rest are left alone on
+-- purpose, so the "Raise order" button on a quotation page has something real to
+-- act on during a demo.
+-- ============================================================================
+
+delete from orders where reference like 'ORD-2026-%';
+
+do $$
+declare
+  v_fin   text := 'user_3IuBz8yfG8nxrMESeoGoWT8pbxU';
+  v_quote record;
+  v_order uuid;
+  v_inv   uuid;
+  v_line  record;
+  v_total numeric;
+  v_index int;
+  v_paid  numeric;
+  v_ref   text;
+begin
+  for v_quote in
+    select q.id, q.reference, q.customer_id, q.submitted_at
+      from quotations q
+     where q.status = 'won'
+       and q.reference in ('Q-2026-0012', 'Q-2026-0005', 'Q-2026-0001')
+     order by q.reference
+  loop
+    v_ref := 'ORD-2026-' || right(v_quote.reference, 4);
+
+    insert into orders
+      (quotation_id, customer_id, reference, status, created_by, created_at)
+    values (
+      v_quote.id, v_quote.customer_id, v_ref, 'fulfilling',
+      v_fin, coalesce(v_quote.submitted_at, now())
+    )
+    returning id into v_order;
+
+    -- ---- one-time lines: a single invoice on 30-day terms
+    select coalesce(sum(l.qty * l.unit_price * (1 - l.discount_pct / 100)), 0)
+      into v_total
+      from quotation_lines l
+      join products p on p.id = l.product_id
+     where l.quotation_id = v_quote.id and p.cadence = 'one_time';
+
+    if v_total > 0 then
+      insert into invoices (order_id, reference, kind, due_date, total, issued_at)
+      values (
+        v_order, v_ref || '-INV', 'one_time',
+        (coalesce(v_quote.submitted_at, now()) + interval '30 days')::date,
+        round(v_total, 2), coalesce(v_quote.submitted_at, now())
+      )
+      returning id into v_inv;
+
+      insert into invoice_lines
+        (invoice_id, product_id, description, qty, unit_price, amount)
+      select v_inv, p.id, p.name, l.qty, l.unit_price,
+             round(l.qty * l.unit_price * (1 - l.discount_pct / 100), 2)
+        from quotation_lines l
+        join products p on p.id = l.product_id
+       where l.quotation_id = v_quote.id and p.cadence = 'one_time';
+
+      -- Paid in full, part paid, or untouched — one of each across the three.
+      v_paid := case v_quote.reference
+                  when 'Q-2026-0001' then round(v_total, 2)
+                  when 'Q-2026-0005' then round(v_total * 0.4, 2)
+                  else 0
+                end;
+
+      if v_paid > 0 then
+        insert into payments
+          (invoice_id, amount, method, reference, recorded_by, recorded_at)
+        values (
+          v_inv, v_paid, 'bank_transfer',
+          'NEFT-' || right(v_quote.reference, 4), v_fin, now() - interval '3 days'
+        );
+
+        update invoices
+           set amount_paid = v_paid,
+               status = case when v_paid >= total then 'paid' else 'part_paid' end
+         where id = v_inv;
+      end if;
+    end if;
+
+    -- ---- recurring lines: one invoice each, covering its own first period.
+    -- Separate invoices because the cadences differ, and one document cannot be
+    -- right about two different periods at once.
+    v_index := 0;
+    for v_line in
+      select l.qty, l.unit_price, l.discount_pct,
+             p.id as product_id, p.name, p.cadence
+        from quotation_lines l
+        join products p on p.id = l.product_id
+       where l.quotation_id = v_quote.id and p.cadence <> 'one_time'
+       order by p.name
+    loop
+      v_index := v_index + 1;
+      v_total := round(
+        v_line.qty * v_line.unit_price * (1 - v_line.discount_pct / 100), 2);
+
+      insert into invoices
+        (order_id, reference, kind, period_start, period_end, due_date, total, issued_at)
+      values (
+        v_order, v_ref || '-SUB' || v_index, 'recurring',
+        coalesce(v_quote.submitted_at, now())::date,
+        (coalesce(v_quote.submitted_at, now())
+          + (case v_line.cadence
+               when 'monthly'   then interval '1 month'
+               when 'quarterly' then interval '3 months'
+               else interval '12 months'
+             end))::date,
+        coalesce(v_quote.submitted_at, now())::date,
+        v_total, coalesce(v_quote.submitted_at, now())
+      )
+      returning id into v_inv;
+
+      insert into invoice_lines
+        (invoice_id, product_id, description, qty, unit_price, amount)
+      values (
+        v_inv, v_line.product_id, v_line.name,
+        v_line.qty, v_line.unit_price, v_total
+      );
+    end loop;
+  end loop;
+end $$;
+
+-- One subscription already cancelled mid-cycle, so the credit-note half of B7 is
+-- visible without anyone having to cancel something first to see it.
+insert into credit_notes
+  (invoice_id, order_id, amount, reason, note, created_by, created_at)
+select i.id, i.order_id, round(i.total * 0.5, 2), 'cancellation',
+       'Quantity 1 to 0 mid-cycle',
+       'user_3IuBz8yfG8nxrMESeoGoWT8pbxU', now() - interval '2 days'
+  from invoices i
+ where i.reference = 'ORD-2026-0001-SUB1';
+
+
+-- ============================================================================
 -- Verification — every line should report a non-zero count, and the per-role
 -- checks below should each return at least one row.
 -- ============================================================================
@@ -1298,6 +1784,12 @@ union all select 'approvals',            count(*) from approvals
 union all select 'quotation_allocations',count(*) from quotation_allocations
 union all select 'negotiation_messages', count(*) from negotiation_messages
 union all select 'config_audit_log',     count(*) from config_audit_log
+union all select 'deal_nudges',           count(*) from deal_nudges
+union all select 'orders',                count(*) from orders
+union all select 'invoices',              count(*) from invoices
+union all select 'invoice_lines',         count(*) from invoice_lines
+union all select 'payments',              count(*) from payments
+union all select 'credit_notes',          count(*) from credit_notes
 order by table_name;
 
 -- What each role will see.
@@ -1322,6 +1814,16 @@ union all
 select 'finance: recurring lines',    count(*)::text
   from quotation_lines l join products p on p.id = l.product_id
  where p.cadence <> 'one_time'
+union all
+select 'finance: outstanding invoices', count(*)::text
+  from invoices where status in ('issued','part_paid')
+union all
+select 'finance: recurring invoices',   count(*)::text
+  from invoices where kind = 'recurring'
+union all
+select 'manager: stalled candidates',   count(*)::text
+  from quotations
+ where status = 'pending_approval' and submitted_at < now() - interval '5 days'
 union all
 select 'admin: audit entries',        count(*)::text from config_audit_log
 union all

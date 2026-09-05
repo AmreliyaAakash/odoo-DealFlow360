@@ -12,30 +12,43 @@ import {
   Th,
   Tr,
 } from "@/components/dashboard/panel";
+import { currentUser } from "@/lib/auth";
+import { loadLedger } from "@/lib/invoices-server";
+import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import { loadFinanceDashboard } from "../data";
 import { requireFinance } from "../guard";
+import { InvoiceTable } from "../invoice-table";
 import { MrrChart } from "../mrr-chart";
 
 /** Subscriptions and their upcoming bill dates. */
 export default async function BillingPage() {
   await requireFinance();
 
-  const data = await loadFinanceDashboard();
+  const { userId, role } = await currentUser();
+  const { access } = await effectiveAccess(userId ?? "", role);
+  const canWrite = canWith(access, "billing", "write");
+
+  const [data, ledger] = await Promise.all([loadFinanceDashboard(), loadLedger()]);
   const subscriptions = data.queue.filter((row) => row.kind === "subscription");
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
       <PageHeader
         title="Subscriptions & Billing"
-        caption={`${subscriptions.length} active · ${formatCurrency(data.stats.mrr)} MRR`}
+        caption={`${subscriptions.length} active · ${formatCurrency(data.stats.mrr)} MRR · ${formatCurrency(ledger.totals.outstanding)} outstanding`}
         badge="Recurring"
       />
 
       {data.loadError ? (
         <Notice>Could not load billing data: {data.loadError}</Notice>
       ) : null}
+      {ledger.error ? (
+        <Notice>Could not load the ledger: {ledger.error}</Notice>
+      ) : null}
 
       <MrrChart data={data.mrrTrend} />
+
+      <InvoiceTable invoices={ledger.invoices} canWrite={canWrite} />
 
       <Panel delay={120}>
         <PanelHeader

@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/quotations";
 import { requirePortalIdentity } from "../guard";
 import { loadPortalQuote } from "./data";
 import { QuoteStepper } from "./quote-stepper";
+import { ConfirmBar } from "./confirm-bar";
 import { QuoteView } from "./quote-view";
 
 /**
@@ -98,6 +99,10 @@ export default async function PortalQuotePage({
           <QuoteStepper stage={quote.stage} closedLost={quote.closedLost} />
         </div>
       </section>
+
+      {/* Above the lines: the customer should see what they can do before they
+          finish reading what they are being asked to pay. */}
+      {quote.closedLost ? null : <ConfirmBar quote={quote} />}
 
       <QuoteView quote={quote} />
     </main>

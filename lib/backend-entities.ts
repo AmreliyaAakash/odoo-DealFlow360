@@ -23,7 +23,7 @@ export function isBackendEntity(value: unknown): value is BackendEntity {
   );
 }
 
-export type FieldType = "text" | "number" | "select";
+export type FieldType = "text" | "number" | "select" | "boolean";
 
 export type EntityField = {
   key: string;
@@ -71,8 +71,19 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       { key: "list_price", label: "List price", type: "number", required: true, min: 0 },
       { key: "cost", label: "Cost", type: "number", required: true, min: 0 },
       { key: "cadence", label: "Cadence", type: "select", options: CADENCES },
+      { key: "promoted", label: "Promoted", type: "boolean" },
     ],
-    columns: ["id", "name", "sku", "category", "list_price", "cost", "cadence", "active"],
+    columns: [
+      "id",
+      "name",
+      "sku",
+      "category",
+      "list_price",
+      "cost",
+      "cadence",
+      "promoted",
+      "active",
+    ],
   },
 
   "discount-rules": {
@@ -125,8 +136,22 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       { key: "code", label: "Code", type: "text", required: true, immutable: true },
       { key: "region", label: "Region", type: "text" },
       { key: "priority", label: "Priority", type: "number", min: 0 },
+      {
+        key: "shipping_cost_weight",
+        label: "Shipping cost weight",
+        type: "number",
+        min: 0,
+      },
     ],
-    columns: ["id", "name", "code", "region", "priority", "active"],
+    columns: [
+      "id",
+      "name",
+      "code",
+      "region",
+      "priority",
+      "shipping_cost_weight",
+      "active",
+    ],
   },
 
   subscriptions: {
@@ -199,6 +224,12 @@ export function parseRow(
     const raw = input[field.key];
 
     if (raw === null || raw === "") {
+      // A flag has no null: an absent checkbox is off, and writing null would
+      // only fail against a not-null column.
+      if (field.type === "boolean") {
+        values[field.key] = false;
+        continue;
+      }
       if (field.required) return { error: `${field.label} is required` };
       values[field.key] = null;
       continue;
@@ -217,6 +248,20 @@ export function parseRow(
       }
       values[field.key] = value;
       continue;
+    }
+
+    if (field.type === "boolean") {
+      // Accepts a real boolean and the string a form value round-trips into,
+      // because the editor stores every draft field as text.
+      if (typeof raw === "boolean") {
+        values[field.key] = raw;
+        continue;
+      }
+      if (raw === "true" || raw === "false") {
+        values[field.key] = raw === "true";
+        continue;
+      }
+      return { error: `${field.label} must be true or false` };
     }
 
     if (typeof raw !== "string") {

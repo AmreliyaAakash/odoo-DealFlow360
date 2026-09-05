@@ -9,7 +9,9 @@ import {
   type QuotationLineInput,
 } from "@/lib/quotations";
 import { resolveUserNames, nameFor } from "@/lib/users-server";
+import { loadLedger } from "@/lib/invoices-server";
 import { QuoteLineRow } from "@/components/QuoteLineRow";
+import { WarehouseSplitView } from "@/components/WarehouseSplitView";
 import { ApprovalBanner } from "@/components/dashboard/approval-banner";
 import {
   DecisionTimeline,
@@ -28,7 +30,15 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { TierBadge } from "@/components/dashboard/tier-badge";
 import { loadBuilderData, requireBuilderAccess } from "../builder-data";
 import { QuotationForm, type QuotationDraft } from "../quotation-form";
+import { OrderPanel } from "./order-panel";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import {
+  ALLOCATABLE_STATUSES,
+  loadSplitForQuotation,
+} from "@/lib/warehouse-split-server";
+
+/** Once confirmed, the deal has a money side and the order panel appears. */
+const ORDERABLE_STATUSES = new Set(["won"]);
 
 /** Statuses a rep may still edit. Anything further along is read-only. */
 const EDITABLE_STATUSES = new Set(["draft", "returned"]);
@@ -134,6 +144,21 @@ export default async function QuotationPage({
         )
       : [];
 
+  // Only loaded when there is something to allocate against, so a draft does no
+  // stock work at all.
+  const splitResult =
+    ALLOCATABLE_STATUSES.has(status) && actor.canViewSplit
+      ? await loadSplitForQuotation(quotation.id)
+      : null;
+  const split = splitResult && !("error" in splitResult) ? splitResult : null;
+
+  // Billing only exists after the customer has confirmed, so a quote that is
+  // merely approved does no ledger work at all.
+  const billing =
+    ORDERABLE_STATUSES.has(status) && actor.canViewBilling
+      ? await loadOrderForQuotation(quotation.id)
+      : null;
+
   const deciderNames = await resolveUserNames(
     decisionRows.map((row) => row.decided_by),
   );
@@ -184,6 +209,31 @@ export default async function QuotationPage({
 
       <DecisionTimeline decisions={decisions} outstanding={outstanding} />
 
+      {/* Fulfilment only becomes a question once the deal is real — before that
+          there is nothing to reserve stock against. */}
+      {split ? (
+        <WarehouseSplitView
+          quotationId={quotation.id}
+          canCommit={actor.canCommitSplit}
+          initial={split}
+        />
+      ) : null}
+
+      {splitResult && "error" in splitResult ? (
+        <Notice tone="danger">
+          Could not load the fulfilment split: {splitResult.error}
+        </Notice>
+      ) : null}
+
+      {billing ? (
+        <OrderPanel
+          quotationId={quotation.id}
+          order={billing.order}
+          invoices={billing.invoices}
+          canRaise={actor.canWriteBilling}
+        />
+      ) : null}
+
       {editable ? (
         <QuotationForm
           customers={data.customers}
@@ -205,6 +255,25 @@ export default async function QuotationPage({
       )}
     </main>
   );
+}
+
+/**
+ * The order raised from this quotation, with its invoices — or nulls when it has
+ * not been ordered yet, which is what the panel renders its button for.
+ */
+async function loadOrderForQuotation(quotationId: string) {
+  const supabase = createServerSupabaseClient();
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, reference, status")
+    .eq("quotation_id", quotationId)
+    .maybeSingle<{ id: string; reference: string | null; status: string }>();
+
+  if (!order) return { order: null, invoices: [] };
+
+  const ledger = await loadLedger(order.id);
+  return { order, invoices: ledger.invoices };
 }
 
 function ReadOnlyLines({

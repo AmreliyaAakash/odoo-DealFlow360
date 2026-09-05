@@ -67,6 +67,12 @@ export type BuilderActor = {
   role: string | null;
   scope: ReturnType<typeof scopeWith>;
   canWrite: boolean;
+  /** Whether the fulfilment split may be read, and whether it may be committed. */
+  canViewSplit: boolean;
+  canCommitSplit: boolean;
+  /** Whether the order and its invoices may be read, and orders raised. */
+  canViewBilling: boolean;
+  canWriteBilling: boolean;
 };
 
 /**
@@ -88,5 +94,9 @@ export async function requireBuilderAccess(): Promise<BuilderActor> {
     role,
     scope: scopeWith(access, "quotationBuilder"),
     canWrite: canWith(access, "quotationBuilder", "write"),
+    canViewSplit: canWith(access, "warehouseSplit", "view"),
+    canCommitSplit: canWith(access, "warehouseSplit", "write"),
+    canViewBilling: canWith(access, "billing", "view"),
+    canWriteBilling: canWith(access, "billing", "write"),
   };
 }

@@ -13,6 +13,11 @@ import type { PortalQuote } from "./types";
 export function QuoteView({ quote }: { quote: PortalQuote }) {
   const thread = useRef<NegotiationHandle>(null);
 
+  // Terms stop being negotiable once they are settled, not only once the deal is
+  // lost: proposing a change against a quotation the customer already confirmed
+  // would promise a conversation nobody is going to have.
+  const locked = quote.closedLost || quote.settled;
+
   async function handleProposal(proposal: Proposal) {
     await thread.current?.send(proposalToMessage(proposal));
   }
@@ -25,7 +30,9 @@ export function QuoteView({ quote }: { quote: PortalQuote }) {
           <p className="text-[11px] text-muted-foreground">
             {quote.closedLost
               ? "This quotation is closed."
-              : "Propose a change on any line and your account manager will see it."}
+              : quote.settled
+                ? "You have confirmed these terms."
+                : "Propose a change on any line and your account manager will see it."}
           </p>
         </header>
 
@@ -34,7 +41,7 @@ export function QuoteView({ quote }: { quote: PortalQuote }) {
           subtotal={quote.subtotal}
           discountTotal={quote.discountTotal}
           netTotal={quote.netTotal}
-          readOnly={quote.closedLost}
+          readOnly={locked}
           onProposed={handleProposal}
         />
 
@@ -48,7 +55,7 @@ export function QuoteView({ quote }: { quote: PortalQuote }) {
       <NegotiationThread
         ref={thread}
         quoteId={quote.id}
-        readOnly={quote.closedLost}
+        readOnly={locked}
       />
     </div>
   );

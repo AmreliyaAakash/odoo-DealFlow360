@@ -114,3 +114,58 @@ insert into upsell_rules (name, trigger_category, suggested_product_id, priority
 select 'Storage → Install & Commissioning', 'Storage', p.id, 30
 from products p where p.sku = 'SVC-INST'
 on conflict (name) do nothing;
+
+-- ============================================================ shipping weights
+--
+-- The split engine only uses these to break ties between warehouses that cover
+-- the same amount of an order, so the numbers are relative, not currency.
+-- Amsterdam is the cheap default; Singapore is the one you reach for last.
+
+update warehouses set shipping_cost_weight = case code
+  when 'AMS' then 1.0
+  when 'FRA' then 1.4
+  when 'DFW' then 2.2
+  when 'SIN' then 3.0
+  else 1.0
+end
+where code in ('AMS','FRA','DFW','SIN');
+
+-- ============================================================ scarcity
+--
+-- Deliberate: with 40 units in Amsterdam every order is filled from one site and
+-- the split engine has nothing to demonstrate. The R650 is made scarce enough
+-- that a normal order has to be spread across warehouses, and scarcer still than
+-- the total demand so a backorder appears and can be consolidated later.
+
+update warehouse_stock ws
+   set available = case w.code
+         when 'AMS' then 4
+         when 'FRA' then 3
+         when 'DFW' then 2
+         else 0
+       end
+  from warehouses w, products p
+ where ws.warehouse_id = w.id
+   and ws.product_id = p.id
+   and p.sku = 'SRV-R650';
+
+-- Premium support is stocked in one place only, so a mixed order shows the
+-- engine choosing a second site for a single line rather than splitting all of them.
+update warehouse_stock ws
+   set available = case w.code when 'FRA' then 50 else 0 end
+  from warehouses w, products p
+ where ws.warehouse_id = w.id
+   and ws.product_id = p.id
+   and p.sku = 'SUB-PRM';
+
+-- ============================================================ promotions
+--
+-- What the desk is pushing this quarter. The upsell panel ranks these above an
+-- equally good suggestion that is not promoted.
+
+update products set promoted = true  where sku in ('SUB-PRM', 'SVC-INST');
+update products set promoted = false where sku not in ('SUB-PRM', 'SVC-INST');
+
+-- A margin floor on the rule that would otherwise surface the thinnest add-on.
+update upsell_rules set min_margin_pct = 25
+ where name = 'Storage → Install & Commissioning';

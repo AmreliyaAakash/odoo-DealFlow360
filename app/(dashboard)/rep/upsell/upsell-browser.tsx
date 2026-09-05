@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PackageIcon } from "@phosphor-icons/react";
 import { formatCurrency, type Product } from "@/lib/quotations";
 import { cn } from "@/lib/utils";
@@ -8,7 +9,15 @@ import { UpsellPanel } from "@/components/UpsellPanel";
 import { Panel, PanelHeader } from "@/components/dashboard/panel";
 
 export function UpsellSuggestionsBrowser({ products }: { products: Product[] }) {
+  const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+
+  // A cart of one: this screen explores what pairs with a single product, so the
+  // margin figure is that product's own rather than a deal's blended move.
+  const cart = useMemo(
+    () => (selected ? [{ productId: selected, qty: 1, discountPct: 0 }] : []),
+    [selected],
+  );
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -56,10 +65,13 @@ export function UpsellSuggestionsBrowser({ products }: { products: Product[] }) 
         </div>
       </Panel>
 
+      {/* No quotation is open on this screen, so accepting a suggestion opens a
+          builder that already holds it rather than silently doing nothing. */}
       <UpsellPanel
-        productId={selected}
-        // TODO(B5): add the suggestion to the rep's open quotation.
-        onAddToQuote={() => {}}
+        lines={cart}
+        onAddToQuote={(productId) =>
+          router.push(`/quotations/new?product=${encodeURIComponent(productId)}`)
+        }
       />
     </div>
   );
