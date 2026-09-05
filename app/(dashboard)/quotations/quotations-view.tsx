@@ -104,14 +104,18 @@ function Board({ deals }: { deals: PipelineDeal[] }) {
     // Horizontal scroll rather than wrapping: a stage that drops onto a second
     // row stops reading as a step in a sequence.
     <div className="-mx-1 overflow-x-auto overscroll-x-contain touch-pan-y px-1 pb-1">
-      <div className="grid min-w-[64rem] grid-cols-5 gap-3">
+      <div className="grid min-w-[64rem] grid-cols-5 gap-3 items-start">
         {STAGES.map((stage, index) => {
           const inStage = deals.filter((deal) => deal.status === stage);
           const value = inStage.reduce((sum, deal) => sum + deal.value, 0);
 
           return (
-            <Panel key={stage} delay={index * 60} className="flex flex-col p-3">
-              <div className="flex items-center gap-1.5">
+            <Panel
+              key={stage}
+              delay={index * 60}
+              className="flex flex-col p-3 max-h-[calc(100vh-12.5rem)]"
+            >
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span
                   className="size-2 shrink-0 rounded-full"
                   style={{ background: statusColor(stage) }}
@@ -124,11 +128,11 @@ function Board({ deals }: { deals: PipelineDeal[] }) {
                 </span>
               </div>
 
-              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground shrink-0">
                 {formatCurrency(value)}
               </p>
 
-              <ul className="mt-3 flex flex-col gap-2">
+              <ul className="mt-3 flex flex-col gap-2 overflow-y-auto pr-1 overscroll-y-contain">
                 {inStage.map((deal) => (
                   <li key={deal.id}>
                     <Link
@@ -176,14 +180,14 @@ function Board({ deals }: { deals: PipelineDeal[] }) {
 
 function Table({ deals }: { deals: PipelineDeal[] }) {
   return (
-    <Panel delay={60}>
+    <Panel delay={60} className="flex flex-col max-h-[calc(100vh-12.5rem)]">
       <PanelHeader
         icon={ReceiptIcon}
         title="All quotations"
         caption="Most recently updated first"
       />
 
-      <div className="mt-3">
+      <div className="mt-3 overflow-y-auto overscroll-y-contain">
         <DataTable
           minWidth="38rem"
           head={

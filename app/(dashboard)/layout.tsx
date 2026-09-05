@@ -26,7 +26,7 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
 
   return (
     <PermissionsProvider value={permissions}>
-      <div className="flex min-h-full flex-1 gap-4 bg-muted/40 p-4">
+      <div className="flex min-h-screen flex-1 gap-4 bg-muted/40 p-4">
         <DashboardSidebar role={role} watchlist={watchlist} />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
