@@ -322,7 +322,7 @@ export function DashboardSidebar({
           alt="DealFlow360"
           width={180}
           height={32}
-          className="h-[30px] w-auto flex-1 object-contain object-left dark:invert"
+          className="h-[45px] w-auto flex-1 object-contain object-left dark:invert"
           priority
         />
       </Link>
