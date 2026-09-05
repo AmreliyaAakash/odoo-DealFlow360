@@ -32,6 +32,12 @@ const isPublicRoute = createRouteMatcher([
   "/unauthorized",
 ]);
 
+/**
+ * The setup check needs a session but no role — it exists precisely for the case
+ * where the role is what is broken, so gating it on one would make it useless.
+ */
+const isDiagnosticsRoute = createRouteMatcher(["/diagnostics", "/api/diagnostics"]);
+
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
 
 /**
@@ -98,6 +104,8 @@ export default clerkMiddleware(async (auth, request) => {
       ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       : redirectToSignIn({ returnBackUrl: request.url });
   }
+
+  if (isDiagnosticsRoute(request)) return;
 
   const allowed = requiredRoles(request);
   if (!allowed) return;

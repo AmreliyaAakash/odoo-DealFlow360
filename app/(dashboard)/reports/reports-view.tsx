@@ -85,12 +85,12 @@ export function ReportsView({
     try {
       const response = await fetch(`/api/reports?${queryString()}`);
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.error ?? "Could not run the report");
+      if (!response.ok) throw new Error(body?.error ?? "Could not generate the report");
 
       setRows(body.rows ?? []);
       setTotals(body.totals ?? EMPTY_TOTALS);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not run the report");
+      setError(cause instanceof Error ? cause.message : "Could not generate the report");
       setRows([]);
       setTotals(EMPTY_TOTALS);
     } finally {
@@ -178,7 +178,7 @@ export function ReportsView({
             className="flex h-8 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-zinc-50 transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
           >
             <ArrowClockwiseIcon size={13} className={busy ? "animate-spin" : ""} />
-            {busy ? "Running" : "Run report"}
+            {busy ? "Generating" : "Generate report"}
           </button>
 
           <span className="ml-auto flex gap-2">
@@ -227,7 +227,7 @@ export function ReportsView({
           title="Results"
           caption={
             busy
-              ? "Running…"
+              ? "Generating…"
               : `${formatNumber(rows.length)} row${rows.length === 1 ? "" : "s"} · ${formatCurrency(totals.netTotal)}`
           }
         />

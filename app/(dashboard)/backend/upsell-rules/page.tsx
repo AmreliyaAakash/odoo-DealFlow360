@@ -2,11 +2,8 @@ import { redirect } from "next/navigation";
 import { currentRole } from "@/lib/auth";
 import { canWrite } from "@/lib/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import {
-  ResourceTable,
-  type ResourceField,
-  type ResourceRow,
-} from "@/components/backend/resource-table";
+import { ResourceTable, type ResourceRow } from "@/components/backend/resource-table";
+import type { EntityField } from "@/lib/backend-entities";
 
 /**
  * Upsell rules — which product to suggest alongside which. Admin-only in the
@@ -16,10 +13,10 @@ import {
  * form is not yet wired up (A2–A5 share that gap).
  */
 
-const FIELDS: ResourceField[] = [
-  { key: "name", label: "Name" },
-  { key: "trigger", label: "When the quote contains" },
-  { key: "suggests", label: "Suggest" },
+const FIELDS: EntityField[] = [
+  { key: "name", label: "Name", type: "text" },
+  { key: "trigger", label: "When the quote contains", type: "text" },
+  { key: "suggests", label: "Suggest", type: "text" },
   { key: "priority", label: "Priority", type: "number" },
 ];
 
