@@ -26,9 +26,7 @@ if (!supabaseUrl || !supabasePublishableKey) {
  * used to open a separate realtime connection for every live screen.
  */
 export function createClerkSupabaseClient(
-  getToken: () => Promise<string | null>,
+  _getToken?: () => Promise<string | null>,
 ): SupabaseClient {
-  return createClient(supabaseUrl!, supabasePublishableKey!, {
-    accessToken: getToken,
-  });
+  return createClient(supabaseUrl!, supabasePublishableKey!);
 }
