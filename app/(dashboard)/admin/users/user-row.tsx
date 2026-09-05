@@ -11,7 +11,14 @@ import type { Role } from "@/types/globals";
 import type { ManagedUser } from "../types";
 import { PermissionEditor } from "./permission-editor";
 
-const ASSIGNABLE: Role[] = ["rep", "manager", "finance", "admin", "customer"];
+const ASSIGNABLE: Role[] = [
+  "rep",
+  "manager",
+  "finance",
+  "specialist",
+  "admin",
+  "customer",
+];
 
 // Labels and accents come from lib/roles.ts; re-exported so existing importers
 // of this module keep working.

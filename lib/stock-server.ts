@@ -5,6 +5,7 @@ import {
   suggestedOrderQty,
   type ReplenishmentRule,
 } from "@/lib/business-logic";
+import { isMissingTable } from "@/lib/schema-gap";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   cellKey,
@@ -50,7 +51,9 @@ export async function loadStockBoard(): Promise<StockBoard> {
       >(),
     supabase
       .from("replenishment_rules")
-      .select("warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days")
+      .select(
+        "warehouse_id, product_id, reorder_point, reorder_qty, lead_time_days",
+      )
       .eq("active", true)
       .returns<
         {
@@ -63,12 +66,19 @@ export async function loadStockBoard(): Promise<StockBoard> {
       >(),
   ]);
 
+  // A database created before replenishment_rules existed answers this with
+  // "Could not find the table ... in the schema cache". That is a setup step
+  // outstanding, not a failure of the page: stock on hand is most of what this
+  // screen is for and it reads from a table that has always been there. So the
+  // grid renders, the reorder panel says what to run, and the raw PostgREST
+  // string never reaches the admin.
+  const rulesMissing = isMissingTable(rules.error);
+
   const error =
     warehouses.error?.message ??
     products.error?.message ??
     stock.error?.message ??
-    rules.error?.message ??
-    null;
+    (rulesMissing ? null : (rules.error?.message ?? null));
 
   const ruleFor = new Map<string, ReplenishmentRule>(
     (rules.data ?? []).map((row) => [
@@ -141,6 +151,8 @@ export async function loadStockBoard(): Promise<StockBoard> {
     products: productRows,
     cells,
     reorders,
+    rulesMissing,
     error,
   };
 }
+

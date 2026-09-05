@@ -21,16 +21,12 @@ export type BackendEntity = (typeof BACKEND_ENTITIES)[number];
 
 export function isBackendEntity(value: unknown): value is BackendEntity {
   return (
-    typeof value === "string" && (BACKEND_ENTITIES as readonly string[]).includes(value)
+    typeof value === "string" &&
+    (BACKEND_ENTITIES as readonly string[]).includes(value)
   );
 }
 
-export type FieldType =
-  | "text"
-  | "number"
-  | "select"
-  | "boolean"
-  | "reference";
+export type FieldType = "text" | "number" | "select" | "boolean" | "reference";
 
 /**
  * Where a `reference` field gets its choices.
@@ -55,6 +51,25 @@ export type EntityField = {
   options?: readonly string[];
   /** Where a reference field's options come from. */
   reference?: ReferenceSource;
+  /**
+   * Another field on this entity whose value must not be picked here.
+   *
+   * The chosen row is removed from this field's options, so the clash cannot be
+   * made in the first place. Rejecting it on save is still correct — a second
+   * tab, or a direct API call, does not go through this dropdown — but being
+   * told at the end of a form what could have been prevented at the start is a
+   * poor trade.
+   */
+  distinctFrom?: string;
+  /**
+   * Existing values for a free-text field, offered as suggestions.
+   *
+   * A category is matched by exact string, so "server" and "Servers" are
+   * different categories and a rule naming one that no product uses never
+   * fires. Offering what is actually in the catalogue turns a silent dead rule
+   * into a two-character choice.
+   */
+  suggestFrom?: { table: string; column: string };
   required?: boolean;
   /** Not editable after creation. */
   immutable?: boolean;
@@ -62,6 +77,17 @@ export type EntityField = {
   max?: number;
   /** Shown under the input in the editor. */
   hint?: string;
+  /**
+   * Section heading this field belongs under in the editor.
+   *
+   * A config row is a set of separate decisions — what to call it, when it
+   * fires, what it does — and a single flat column of inputs makes the reader
+   * work that structure out for themselves every time. Fields keep their
+   * declared order within a section; anything ungrouped sits in the first one.
+   */
+  group?: string;
+  /** Narrow fields pair up on one row; the default is full width. */
+  width?: "half";
 };
 
 const PRODUCT_REF: ReferenceSource = {
@@ -106,7 +132,13 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       { key: "name", label: "Name", type: "text", required: true },
       { key: "sku", label: "SKU", type: "text", required: true },
       { key: "category", label: "Category", type: "text", required: true },
-      { key: "list_price", label: "List price", type: "number", required: true, min: 0 },
+      {
+        key: "list_price",
+        label: "List price",
+        type: "number",
+        required: true,
+        min: 0,
+      },
       { key: "cost", label: "Cost", type: "number", required: true, min: 0 },
       { key: "cadence", label: "Cadence", type: "select", options: CADENCES },
       { key: "promoted", label: "Promoted", type: "boolean" },
@@ -171,7 +203,13 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
     softDelete: true,
     fields: [
       { key: "name", label: "Name", type: "text", required: true },
-      { key: "code", label: "Code", type: "text", required: true, immutable: true },
+      {
+        key: "code",
+        label: "Code",
+        type: "text",
+        required: true,
+        immutable: true,
+      },
       { key: "region", label: "Region", type: "text" },
       { key: "priority", label: "Priority", type: "number", min: 0 },
       {
@@ -208,7 +246,13 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
         options: PLAN_CADENCES,
         required: true,
       },
-      { key: "unit_price", label: "Unit price", type: "number", required: true, min: 0 },
+      {
+        key: "unit_price",
+        label: "Unit price",
+        type: "number",
+        required: true,
+        min: 0,
+      },
       {
         key: "min_term_months",
         label: "Min term (months)",
@@ -216,7 +260,14 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
         min: 1,
       },
     ],
-    columns: ["id", "name", "cadence", "unit_price", "min_term_months", "active"],
+    columns: [
+      "id",
+      "name",
+      "cadence",
+      "unit_price",
+      "min_term_months",
+      "active",
+    ],
   },
 
   "upsell-rules": {
@@ -227,30 +278,45 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
     orderBy: "priority",
     softDelete: true,
     fields: [
-      { key: "name", label: "Name", type: "text", required: true },
+      {
+        key: "name",
+        label: "Name",
+        type: "text",
+        required: true,
+        group: "Rule",
+        hint: 'How this rule appears in the list. Say what it pairs, e.g. "Servers → Support Standard".',
+      },
       {
         key: "trigger_product_id",
         label: "Triggered by product",
+        group: "When it fires",
         type: "reference",
         reference: PRODUCT_REF,
+        distinctFrom: "suggested_product_id",
         hint: "Fires when this exact product is on the quote.",
       },
       {
         key: "trigger_category",
         label: "…or by category",
+        group: "When it fires",
         type: "text",
-        hint: "Fires on any product in this category. Use one trigger or the other.",
+        suggestFrom: { table: "products", column: "category" },
+        hint: "Fires on any product in this category. Set one trigger or the other, not both.",
       },
       {
         key: "suggested_product_id",
         label: "Suggest",
+        group: "What it suggests",
         type: "reference",
         reference: PRODUCT_REF,
+        distinctFrom: "trigger_product_id",
         required: true,
       },
       {
         key: "priority",
         label: "Priority",
+        group: "What it suggests",
+        width: "half",
         type: "number",
         min: 0,
         hint: "Lower wins when several rules suggest the same product.",
@@ -258,6 +324,8 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "min_margin_pct",
         label: "Min margin %",
+        group: "What it suggests",
+        width: "half",
         type: "number",
         min: 0,
         max: 100,
@@ -287,6 +355,8 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "warehouse_id",
         label: "Warehouse",
+        group: "Which line",
+        width: "half",
         type: "reference",
         reference: WAREHOUSE_REF,
         required: true,
@@ -294,6 +364,8 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "product_id",
         label: "Product",
+        group: "Which line",
+        width: "half",
         type: "reference",
         reference: PRODUCT_REF,
         required: true,
@@ -301,6 +373,8 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "reorder_point",
         label: "Reorder at",
+        group: "What to do",
+        width: "half",
         type: "number",
         required: true,
         min: 0,
@@ -309,6 +383,8 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "reorder_qty",
         label: "Reorder quantity",
+        group: "What to do",
+        width: "half",
         type: "number",
         required: true,
         min: 1,
@@ -317,8 +393,11 @@ const CONFIGS: Record<BackendEntity, EntityConfig> = {
       {
         key: "lead_time_days",
         label: "Lead time (days)",
+        group: "What to do",
+        width: "half",
         type: "number",
         min: 0,
+        hint: "Calendar days from ordering to arrival.",
       },
     ],
     columns: [
@@ -382,6 +461,18 @@ export function parseRow(
         continue;
       }
       if (field.required) return { error: `${field.label} is required` };
+
+      // On create, leave the column out rather than writing null into it. A
+      // column default only fires when the column is absent from the INSERT —
+      // passing null explicitly overrides it and fails outright against a
+      // not-null column, which is what an optional-in-the-form field like
+      // `warehouses.shipping_cost_weight` (not null default 1) does. Omitting
+      // is also equivalent to null for a nullable column, so this is safe for
+      // every optional field rather than a special case for one.
+      if (!partial) continue;
+
+      // On update, null is the user clearing a value they can see, so it is
+      // written as asked.
       values[field.key] = null;
       continue;
     }
@@ -430,8 +521,14 @@ export function parseRow(
       continue;
     }
 
-    if (field.type === "select" && field.options && !field.options.includes(raw)) {
-      return { error: `${field.label} must be one of: ${field.options.join(", ")}` };
+    if (
+      field.type === "select" &&
+      field.options &&
+      !field.options.includes(raw)
+    ) {
+      return {
+        error: `${field.label} must be one of: ${field.options.join(", ")}`,
+      };
     }
 
     values[field.key] = raw.trim();
@@ -448,8 +545,7 @@ export function parseRow(
   return { values };
 }
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Rules that involve more than one field, which the field list cannot express.
@@ -471,8 +567,19 @@ export function checkEntityRules(
   const value = (key: string) => row[key] ?? null;
 
   if (entity === "upsell-rules") {
-    if (!value("trigger_product_id") && !value("trigger_category")) {
+    const triggerProduct = value("trigger_product_id");
+    const triggerCategory = value("trigger_category");
+
+    if (!triggerProduct && !triggerCategory) {
       return "An upsell rule needs a trigger: choose a product, or name a category.";
+    }
+
+    // Two triggers widen the rule rather than narrowing it: the matcher ORs
+    // them, so the rule fires on that product *or* on anything in that
+    // category. Anyone filling both fields means the opposite, so this is
+    // refused rather than quietly saved as something broader than intended.
+    if (triggerProduct && triggerCategory) {
+      return "Set one trigger, not both. A rule with a product and a category fires on either of them, which is wider than it looks — clear whichever you did not mean.";
     }
 
     if (

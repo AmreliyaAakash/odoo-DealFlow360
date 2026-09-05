@@ -2,9 +2,14 @@ import { requireCapability } from "@/lib/auth";
 import { entityConfig, type BackendEntity } from "@/lib/backend-entities";
 import { loadReferenceOptions } from "@/lib/reference-options";
 import { canWith, effectiveAccess } from "@/lib/permissions-server";
+import { schemaGap } from "@/lib/schema-gap";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { Notice, PageHeader } from "@/components/dashboard/panel";
-import { ResourceTable, type ResourceRow } from "@/components/backend/resource-table";
+import {
+  ResourceTable,
+  type ResourceRow,
+} from "@/components/backend/resource-table";
+import { SchemaGapNotice } from "@/components/dashboard/schema-gap-notice";
 
 /**
  * Shared body for the config screens (A2–A5). They differ only by entity, so
@@ -17,8 +22,13 @@ export async function EntityPage({ entity }: { entity: BackendEntity }) {
   if (!authorized.ok) {
     return (
       <main className="flex min-w-0 flex-1 flex-col gap-4">
-        <PageHeader title={config.title} caption="Not available for your role" />
-        <Notice tone="danger">You do not have access to this configuration.</Notice>
+        <PageHeader
+          title={config.title}
+          caption="Not available for your role"
+        />
+        <Notice tone="danger">
+          You do not have access to this configuration.
+        </Notice>
       </main>
     );
   }
@@ -42,6 +52,11 @@ export async function EntityPage({ entity }: { entity: BackendEntity }) {
 
   const rows = data ?? [];
 
+  // A table this build knows about but the database has not got yet is a setup
+  // step outstanding, not a fault. Saying which file to run is worth more than
+  // relaying PostgREST's "schema cache" wording, which reads like a bug.
+  const gap = schemaGap(error);
+
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
       <PageHeader
@@ -54,16 +69,25 @@ export async function EntityPage({ entity }: { entity: BackendEntity }) {
         badge={`${rows.length}`}
       />
 
-      {error ? <Notice>Could not load {config.title}: {error.message}</Notice> : null}
+      {gap ? (
+        <SchemaGapNotice gap={gap} />
+      ) : error ? (
+        <Notice>
+          Could not load {config.title}: {error.message}
+        </Notice>
+      ) : null}
 
-      <ResourceTable
-        entity={entity}
-        title={config.title}
-        fields={config.fields}
-        rows={rows}
-        canWrite={canWrite}
-        references={references}
-      />
+      {gap ? null : (
+        <ResourceTable
+          entity={entity}
+          title={config.title}
+          fields={config.fields}
+          rows={rows}
+          canWrite={canWrite}
+          references={references}
+        />
+      )}
     </main>
   );
 }
+

@@ -14,7 +14,14 @@ import type { Role } from "@/types/globals";
  * all. Either would leave nobody able to hand the access back.
  */
 
-const ASSIGNABLE: Role[] = ["admin", "manager", "finance", "rep", "customer"];
+const ASSIGNABLE: Role[] = [
+  "admin",
+  "manager",
+  "finance",
+  "rep",
+  "specialist",
+  "customer",
+];
 
 function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ASSIGNABLE as string[]).includes(value);

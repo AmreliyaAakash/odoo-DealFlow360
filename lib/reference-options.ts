@@ -25,10 +25,38 @@ export async function loadReferenceOptions(
   const referenceFields = fields.filter(
     (field) => field.type === "reference" && field.reference,
   );
+  const suggestFields = fields.filter((field) => field.suggestFrom);
 
-  if (referenceFields.length === 0) return {};
+  if (referenceFields.length === 0 && suggestFields.length === 0) return {};
 
   const supabase = createServerSupabaseClient();
+
+  // Distinct values already in use for a free-text field. Offered rather than
+  // enforced: a desk writing a rule for a category it is about to introduce is
+  // legitimate, and a closed list would block it.
+  const suggested = await Promise.all(
+    suggestFields.map(async (field) => {
+      const { table, column } = field.suggestFrom!;
+
+      const { data } = await supabase
+        .from(table)
+        .select(column)
+        .order(column, { ascending: true })
+        .limit(1000)
+        .returns<Record<string, string | null>[]>();
+
+      const seen = new Set<string>();
+      for (const row of data ?? []) {
+        const value = row[column];
+        if (value) seen.add(value);
+      }
+
+      return [
+        field.key,
+        [...seen].map((value) => ({ value, label: value })),
+      ] as const;
+    }),
+  );
 
   const loaded = await Promise.all(
     referenceFields.map(async (field) => {
@@ -57,5 +85,5 @@ export async function loadReferenceOptions(
     }),
   );
 
-  return Object.fromEntries(loaded);
+  return Object.fromEntries([...loaded, ...suggested]);
 }

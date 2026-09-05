@@ -1,0 +1,339 @@
+{
+  "roles": {
+    "admin": 9222,
+    "finance": 9223,
+    "manager": 9224,
+    "customer": 9225,
+    "rep": 9226
+  },
+  "crud": [
+    {
+      "entity": "products",
+      "checks": [
+        {
+          "pass": true,
+          "label": "CREATE responds ok",
+          "detail": "status 201"
+        },
+        {
+          "pass": true,
+          "label": "count is +1 after CREATE",
+          "detail": "12 -> 13"
+        },
+        {
+          "pass": true,
+          "label": "created row is readable back",
+          "detail": ""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "UPDATE actually changed the stored value",
+          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE did not change the count",
+          "detail": "13"
+        },
+        {
+          "pass": true,
+          "label": "DELETE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "soft delete keeps the row",
+          "detail": "row retained"
+        },
+        {
+          "pass": true,
+          "label": "soft delete set active = false",
+          "detail": "active = false"
+        },
+        {
+          "pass": true,
+          "label": "count still includes the retained row",
+          "detail": "12 -> 13"
+        }
+      ],
+      "created": "0622de90-866e-46f1-b37c-7d0a34c28d7e",
+      "leftBehind": "products: id=0622de90-866e-46f1-b37c-7d0a34c28d7e name=E2E-TEST-1788641970480 (deactivated)"
+    },
+    {
+      "entity": "discount-rules",
+      "checks": [
+        {
+          "pass": true,
+          "label": "CREATE responds ok",
+          "detail": "status 201"
+        },
+        {
+          "pass": true,
+          "label": "count is +1 after CREATE",
+          "detail": "17 -> 18"
+        },
+        {
+          "pass": true,
+          "label": "created row is readable back",
+          "detail": ""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "UPDATE actually changed the stored value",
+          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE did not change the count",
+          "detail": "18"
+        },
+        {
+          "pass": true,
+          "label": "DELETE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "soft delete keeps the row",
+          "detail": "row retained"
+        },
+        {
+          "pass": true,
+          "label": "soft delete set active = false",
+          "detail": "active = false"
+        },
+        {
+          "pass": true,
+          "label": "count still includes the retained row",
+          "detail": "17 -> 18"
+        }
+      ],
+      "created": "825d2e77-3a3d-44e0-9b13-fa305bed3a9c",
+      "leftBehind": "discount-rules: id=825d2e77-3a3d-44e0-9b13-fa305bed3a9c name=E2E-TEST-1788641970480 (deactivated)"
+    },
+    {
+      "entity": "warehouses",
+      "checks": [
+        {
+          "pass": true,
+          "label": "CREATE responds ok",
+          "detail": "status 201"
+        },
+        {
+          "pass": true,
+          "label": "count is +1 after CREATE",
+          "detail": "4 -> 5"
+        },
+        {
+          "pass": true,
+          "label": "created row is readable back",
+          "detail": ""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "UPDATE actually changed the stored value",
+          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE did not change the count",
+          "detail": "5"
+        },
+        {
+          "pass": true,
+          "label": "DELETE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "soft delete keeps the row",
+          "detail": "row retained"
+        },
+        {
+          "pass": true,
+          "label": "soft delete set active = false",
+          "detail": "active = false"
+        },
+        {
+          "pass": true,
+          "label": "count still includes the retained row",
+          "detail": "4 -> 5"
+        }
+      ],
+      "created": "4647a22b-7468-410e-bf94-c0856e3e84c7",
+      "leftBehind": "warehouses: id=4647a22b-7468-410e-bf94-c0856e3e84c7 name=E2E-TEST-1788641970480 (deactivated)"
+    },
+    {
+      "entity": "subscriptions",
+      "checks": [
+        {
+          "pass": true,
+          "label": "CREATE responds ok",
+          "detail": "status 201"
+        },
+        {
+          "pass": true,
+          "label": "count is +1 after CREATE",
+          "detail": "5 -> 6"
+        },
+        {
+          "pass": true,
+          "label": "created row is readable back",
+          "detail": ""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "UPDATE actually changed the stored value",
+          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE did not change the count",
+          "detail": "6"
+        },
+        {
+          "pass": true,
+          "label": "DELETE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "soft delete keeps the row",
+          "detail": "row retained"
+        },
+        {
+          "pass": true,
+          "label": "soft delete set active = false",
+          "detail": "active = false"
+        },
+        {
+          "pass": true,
+          "label": "count still includes the retained row",
+          "detail": "5 -> 6"
+        }
+      ],
+      "created": "fb46e401-4262-4cfc-8f4a-d7a83a7ac329",
+      "leftBehind": "subscriptions: id=fb46e401-4262-4cfc-8f4a-d7a83a7ac329 name=E2E-TEST-1788641970480 (deactivated)"
+    },
+    {
+      "entity": "upsell-rules",
+      "checks": [
+        {
+          "pass": true,
+          "label": "CREATE responds ok",
+          "detail": "status 201"
+        },
+        {
+          "pass": true,
+          "label": "count is +1 after CREATE",
+          "detail": "4 -> 5"
+        },
+        {
+          "pass": true,
+          "label": "created row is readable back",
+          "detail": ""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "UPDATE actually changed the stored value",
+          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+        },
+        {
+          "pass": true,
+          "label": "UPDATE did not change the count",
+          "detail": "5"
+        },
+        {
+          "pass": true,
+          "label": "DELETE responds ok",
+          "detail": "status 200"
+        },
+        {
+          "pass": true,
+          "label": "soft delete keeps the row",
+          "detail": "row retained"
+        },
+        {
+          "pass": true,
+          "label": "soft delete set active = false",
+          "detail": "active = false"
+        },
+        {
+          "pass": true,
+          "label": "count still includes the retained row",
+          "detail": "4 -> 5"
+        }
+      ],
+      "created": "7430c593-9439-4c9f-9279-9fbdab1d0110",
+      "leftBehind": "upsell-rules: id=7430c593-9439-4c9f-9279-9fbdab1d0110 name=E2E-TEST-1788641970480 (deactivated)"
+    },
+    {
+      "entity": "replenishment",
+      "checks": [],
+      "created": null,
+      "blocked": "Could not find the table 'public.replenishment_rules' in the schema cache"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "rep",
+      "entity": "warehouses",
+      "why": "a rep may not create a warehouse",
+      "status": 403,
+      "denied": true
+    },
+    {
+      "role": "rep",
+      "entity": "discount-rules",
+      "why": "a rep may not create a discount rule",
+      "status": 403,
+      "denied": true
+    },
+    {
+      "role": "manager",
+      "entity": "products",
+      "why": "a manager may not create a product",
+      "status": 403,
+      "denied": true
+    },
+    {
+      "role": "customer",
+      "entity": "warehouses",
+      "why": "a customer may not create a warehouse",
+      "status": 403,
+      "denied": true
+    }
+  ],
+  "realtime": {
+    "patchStatus": 200,
+    "rowsBefore": 14,
+    "rowsAfter": 14,
+    "stillOnPage": true,
+    "note": "row count is a coarse signal; the channel is confirmed by the socket staying open"
+  }
+}

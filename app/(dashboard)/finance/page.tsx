@@ -1,3 +1,4 @@
+import { requireAnyModule } from "@/lib/page-guard";
 import { Notice, PageHeader } from "@/components/dashboard/panel";
 import { loadFinanceDashboard } from "./data";
 import { requireFinance } from "./guard";
@@ -6,9 +7,22 @@ import { FulfillmentBillingQueue } from "./queue-tabs";
 import { MrrChart } from "./mrr-chart";
 import { WarehouseStockOverview } from "./warehouse-stock";
 
-/** Finance home. */
+/**
+ * Finance home.
+ *
+ * `requireFinance` keeps sales managers out of the billing queue — that is a
+ * role question. Which panels appear is a module question, and the two are not
+ * the same: a finance account with `warehouses` revoked should still get its
+ * revenue chart, and should not be shown an empty stock panel.
+ */
 export default async function FinanceDashboardPage() {
   const role = await requireFinance();
+  const actor = await requireAnyModule(["billing", "warehouses", "warehouseSplit"]);
+
+  const seesStock = actor.can("warehouses", "view");
+  const seesRevenue = actor.can("billing", "view");
+  const seesQueue = actor.can("billing", "view") || actor.can("warehouseSplit", "view");
+
   const data = await loadFinanceDashboard();
 
   return (
@@ -25,14 +39,24 @@ export default async function FinanceDashboardPage() {
 
       <FinanceStatCards stats={data.stats} />
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <MrrChart data={data.mrrTrend} />
+      {/* Recurring revenue is billing, stock is warehouses. A finance account
+          holding only one of them gets that one, full width. */}
+      {seesRevenue || seesStock ? (
+        <div className="grid gap-4 xl:grid-cols-3">
+          {seesRevenue ? (
+            <div className={seesStock ? "xl:col-span-2" : "xl:col-span-3"}>
+              <MrrChart data={data.mrrTrend} />
+            </div>
+          ) : null}
+          {seesStock ? (
+            <div className={seesRevenue ? undefined : "xl:col-span-3"}>
+              <WarehouseStockOverview rows={data.warehouses} />
+            </div>
+          ) : null}
         </div>
-        <WarehouseStockOverview rows={data.warehouses} />
-      </div>
+      ) : null}
 
-      <FulfillmentBillingQueue rows={data.queue} />
+      {seesQueue ? <FulfillmentBillingQueue rows={data.queue} /> : null}
     </main>
   );
 }

@@ -8,6 +8,7 @@ import {
   type ApprovalLevelName,
 } from "@/lib/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import type { Role } from "@/types/globals";
 
 const ACTIONS = ["approve", "reject", "return"] as const;
 type Action = (typeof ACTIONS)[number];
@@ -173,7 +174,7 @@ export async function POST(
  */
 function resolveLevel(
   requested: unknown,
-  role: "manager" | "finance" | "admin" | "rep" | "customer",
+  role: Role,
 ): { name: ApprovalLevelName } | { error: string; status: 400 | 403 } {
   const own = approvalLevelForRole(role);
 

@@ -3,6 +3,7 @@ import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 import { loadCatalog } from "@/lib/catalog-server";
 import { requireModule } from "@/lib/page-guard";
 import { formatCurrency, formatNumber } from "@/lib/quotations";
+import { schemaGap } from "@/lib/schema-gap";
 import { cn } from "@/lib/utils";
 import {
   DataTable,
@@ -15,11 +16,13 @@ import {
   Th,
   Tr,
 } from "@/components/dashboard/panel";
+import { SchemaGapNotice } from "@/components/dashboard/schema-gap-notice";
 
 /** Screen 16 — the catalogue, with the depth behind each row summarised. */
 export default async function ProductsPage() {
   const actor = await requireModule("products");
   const catalog = await loadCatalog();
+  const gap = schemaGap({ message: catalog.error ?? undefined });
 
   const active = catalog.products.filter((product) => product.active);
   const archived = catalog.products.length - active.length;
@@ -41,7 +44,15 @@ export default async function ProductsPage() {
         ) : null}
       </PageHeader>
 
-      {catalog.error ? <Notice tone="danger">{catalog.error}</Notice> : null}
+      {/* Missing catalog-depth structure is a setup step, not a fault: name
+          the file to run instead of relaying the Postgres string. */}
+      {catalog.error ? (
+        gap ? (
+          <SchemaGapNotice gap={gap} />
+        ) : (
+          <Notice tone="danger">{catalog.error}</Notice>
+        )
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat

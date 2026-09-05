@@ -1,4 +1,5 @@
 import { WarehouseIcon } from "@phosphor-icons/react/dist/ssr";
+import { requireModule } from "@/lib/page-guard";
 import { formatNumber } from "@/lib/quotations";
 import {
   DataTable,
@@ -18,6 +19,7 @@ import { WarehouseStockOverview } from "../warehouse-stock";
 /** Read-only stock view for finance; editing warehouses stays in the backend. */
 export default async function FinanceWarehousesPage() {
   await requireFinance();
+  await requireModule("warehouses");
 
   const data = await loadFinanceDashboard();
   const totalOnHand = data.warehouses.reduce((sum, row) => sum + row.onHand, 0);

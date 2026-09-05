@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { PackageIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
+import { TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import { requireModule } from "@/lib/page-guard";
-import { formatNumber } from "@/lib/quotations";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +14,7 @@ import {
   Th,
   Tr,
 } from "@/components/dashboard/panel";
+import { LiveStockTable, type StockLine } from "./live-stock-table";
 
 /**
  * Screen 7 — live stock, and every confirmed order still waiting on it.
@@ -76,7 +76,7 @@ export default async function FulfillmentPage() {
   // down is the one the desk reads here.
   const reserved = await reservedByShelf(supabase);
 
-  const stock = (stockResult.data ?? [])
+  const stock: StockLine[] = (stockResult.data ?? [])
     .filter((row) => row.warehouses?.active)
     .map((row) => {
       const key = `${row.warehouse_id}:${row.product_id}`;
@@ -134,51 +134,7 @@ export default async function FulfillmentPage() {
 
       {error ? <Notice tone="danger">{error}</Notice> : null}
 
-      <Panel delay={60}>
-        <PanelHeader
-          icon={PackageIcon}
-          title="Live stock"
-          caption="On hand, reserved against orders, and what is left to promise"
-        />
-
-        <div className="mt-3">
-          <DataTable
-            minWidth="42rem"
-            head={
-              <>
-                <Th>Warehouse</Th>
-                <Th>Product</Th>
-                <Th className="w-24 text-right">On hand</Th>
-                <Th className="w-24 text-right">Reserved</Th>
-                <Th className="w-24 text-right">Available</Th>
-              </>
-            }
-          >
-            {stock.map((row) => (
-              <Tr key={row.key}>
-                <Td className="font-medium">{row.warehouse}</Td>
-                <Td className="text-muted-foreground">{row.product}</Td>
-                <Td className="text-right tabular-nums">{formatNumber(row.onHand)}</Td>
-                <Td className="text-right tabular-nums text-muted-foreground">
-                  {formatNumber(row.reserved)}
-                </Td>
-                <Td
-                  className={cn(
-                    "text-right font-medium tabular-nums",
-                    row.available === 0 && "text-red-600 dark:text-red-400",
-                  )}
-                >
-                  {formatNumber(row.available)}
-                </Td>
-              </Tr>
-            ))}
-
-            {stock.length === 0 ? (
-              <EmptyRow colSpan={5}>No stock on record.</EmptyRow>
-            ) : null}
-          </DataTable>
-        </div>
-      </Panel>
+      <LiveStockTable stock={stock} />
 
       <Panel delay={140}>
         <PanelHeader

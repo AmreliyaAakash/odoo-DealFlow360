@@ -9,7 +9,14 @@ import type { Role } from "@/types/globals";
  * here instead of being written out twice and drifting.
  */
 
-export const ROLES = ["admin", "manager", "finance", "rep", "customer"] as const;
+export const ROLES = [
+  "admin",
+  "manager",
+  "finance",
+  "rep",
+  "specialist",
+  "customer",
+] as const;
 
 const ROLE_SET = new Set<string>(ROLES);
 
@@ -24,6 +31,7 @@ export const ROLE_LABELS: Record<string, string> = {
   manager: "Sales Manager",
   finance: "Finance",
   rep: "Sales Rep",
+  specialist: "Specialist",
   customer: "Customer (portal)",
   none: "No role",
 };
@@ -38,6 +46,9 @@ export const ROLE_STYLES: Record<string, string> = {
   manager: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
   finance: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   rep: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  // Slate, not a department colour: a specialist has whatever access the admin
+  // gave them, so a badge borrowed from finance or sales would misdescribe it.
+  specialist: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
   customer: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
   none: "bg-muted text-muted-foreground",
 };

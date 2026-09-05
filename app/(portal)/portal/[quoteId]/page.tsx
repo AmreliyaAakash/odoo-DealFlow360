@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { UserButton } from "@clerk/nextjs";
+import { BrandMark } from "@/components/brand-mark";
 import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { PORTAL_STAGE_LABELS } from "@/lib/business-logic";
 import { formatCurrency } from "@/lib/quotations";
@@ -27,7 +27,16 @@ export default async function PortalQuotePage({
   const result = await loadPortalQuote(quoteId, access.identity);
 
   if (!result.ok) {
-    return <PortalNotice reason={result.reason} message={result.message} />;
+    // The detail goes to the server log, never to the page. This is the one
+    // screen an outside customer sees, and `message` is only ever set for
+    // reason "error", where it is the raw Postgres string — rendering it told
+    // them things like `column customers_1.phone does not exist`, which names
+    // internal tables and columns to someone who should never learn them.
+    if (result.message) {
+      console.error(`[portal] quotation ${quoteId} failed to load:`, result.message);
+    }
+
+    return <PortalNotice reason={result.reason} />;
   }
 
   const { quote } = result;
@@ -35,26 +44,7 @@ export default async function PortalQuotePage({
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-950 p-1.5 shadow-sm dark:bg-zinc-100">
-            <Image
-              src="/icon.png"
-              alt="DealFlow360 Icon"
-              width={24}
-              height={24}
-              className="size-5.5 object-contain invert dark:invert-0"
-              priority
-            />
-          </div>
-          <Image
-            src="/logo.png"
-            alt="DealFlow360"
-            width={150}
-            height={28}
-            className="h-6 w-auto object-contain dark:invert"
-            priority
-          />
-        </div>
+        <BrandMark size="md" priority />
         <div className="min-w-0 pl-3 border-l border-border">
           <p className="text-xs font-semibold text-foreground">
             Customer Portal
@@ -148,12 +138,14 @@ const NOTICES: Record<string, { title: string; body: string }> = {
   },
 };
 
+/**
+ * Takes no detail string on purpose — see the call site. Whatever went wrong is
+ * the desk's problem to read in the log, not the customer's to read on the page.
+ */
 function PortalNotice({
   reason,
-  message,
 }: {
   reason: "notFound" | "notReady" | "error" | "unlinked";
-  message?: string;
 }) {
   const notice = NOTICES[reason];
 
@@ -162,11 +154,6 @@ function PortalNotice({
       <div className="max-w-sm rounded-2xl bg-card p-6 text-center ring-1 ring-foreground/10">
         <h1 className="text-base font-semibold">{notice.title}</h1>
         <p className="mt-2 text-xs text-muted-foreground">{notice.body}</p>
-        {message ? (
-          <p className="mt-3 rounded-lg bg-muted p-2 text-[11px] text-muted-foreground">
-            {message}
-          </p>
-        ) : null}
       </div>
     </main>
   );

@@ -44,6 +44,7 @@ import {
 } from "@/components/dashboard/searchable-select";
 import { TierBadge } from "@/components/dashboard/tier-badge";
 import { UpsellPanel } from "@/components/UpsellPanel";
+import { useRole } from "@/lib/use-role";
 
 export type CustomerOption = { id: string; name: string | null; tier: string | null };
 
@@ -139,6 +140,10 @@ export function QuotationForm({
   initialProductId?: string;
 }) {
   const router = useRouter();
+  // The panel calls /api/upsell, which needs `upsellPanel: use`. Without the
+  // module the feature does not exist for this account, so it is not rendered.
+  const { can } = useRole();
+  const showUpsell = can("upsellPanel", "use");
   const editing = draft !== undefined;
   /** Being edited while an approver is holding it. */
   const inApproval = draft?.status === "pending_approval";
@@ -508,7 +513,13 @@ export function QuotationForm({
       {/* Cart and suggestions side by side on a wide screen, stacked below it.
           The panel belongs next to the lines, not on a page of its own: its
           whole value is being visible while the rep is still choosing. */}
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div
+        className={
+          showUpsell
+            ? "grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]"
+            : "grid min-w-0 gap-4"
+        }
+      >
       <Panel delay={80} className="min-w-0">
         <PanelHeader
           icon={ReceiptIcon}
@@ -548,7 +559,9 @@ export function QuotationForm({
         </button>
       </Panel>
 
-        <UpsellPanel lines={priceable} onAddToQuote={addSuggestion} />
+        {showUpsell ? (
+          <UpsellPanel lines={priceable} onAddToQuote={addSuggestion} />
+        ) : null}
       </div>
 
       <Panel delay={160}>

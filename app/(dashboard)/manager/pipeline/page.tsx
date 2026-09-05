@@ -4,6 +4,7 @@ import { BriefcaseIcon } from "@phosphor-icons/react/dist/ssr";
 import { riskScoreFromTotals } from "@/lib/business-logic";
 import { formatCurrency } from "@/lib/quotations";
 import { currentUser, isApprover } from "@/lib/auth";
+import { requireModule } from "@/lib/page-guard";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   DataTable,
@@ -33,11 +34,19 @@ type Row = {
   customers: { name: string | null } | null;
 };
 
-/** Every open deal across the team, ranked by value. */
+/**
+ * Every open deal across the team, ranked by value.
+ *
+ * This is quotation data, so it is gated on `quotationBuilder` as well as on
+ * the approver role — the role says which desk you sit at, the module says
+ * whether you may read quotations at all.
+ */
 export default async function TeamPipelinePage() {
   const { userId, role } = await currentUser();
   if (!userId) redirect("/sign-in");
   if (!isApprover(role)) redirect("/");
+
+  await requireModule("quotationBuilder");
 
   const supabase = createServerSupabaseClient();
 

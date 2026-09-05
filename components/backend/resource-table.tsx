@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PencilSimpleIcon,
@@ -65,6 +65,26 @@ export function ResourceTable({
 
   const writable = canWrite && entity !== null;
 
+  // Fields in their declared order, gathered under their group headings.
+  // Anything ungrouped falls into the first section, which then renders without
+  // a heading — so an entity that never declares a group looks exactly as it
+  // did before.
+  const sections = useMemo(() => {
+    const order: string[] = [];
+    const byGroup = new Map<string, EntityField[]>();
+
+    for (const field of fields) {
+      const name = field.group ?? "";
+      if (!byGroup.has(name)) {
+        byGroup.set(name, []);
+        order.push(name);
+      }
+      byGroup.get(name)!.push(field);
+    }
+
+    return order.map((name) => ({ name, fields: byGroup.get(name)! }));
+  }, [fields]);
+
   function start(row: ResourceRow | null) {
     setEditing(row);
     setError(null);
@@ -122,7 +142,9 @@ export function ResourceTable({
 
   async function remove(row: ResourceRow) {
     const label = labelFor(row);
-    if (!window.confirm(`Deactivate "${label}"? It stays on historic quotations.`)) {
+    if (
+      !window.confirm(`Deactivate "${label}"? It stays on historic quotations.`)
+    ) {
       return;
     }
 
@@ -191,7 +213,11 @@ export function ResourceTable({
             <Tr
               key={row.id}
               className={cn("df-rise-in", row.active === false && "opacity-50")}
-              style={{ "--df-delay": `${Math.min(index * 30, 400)}ms` } as React.CSSProperties}
+              style={
+                {
+                  "--df-delay": `${Math.min(index * 30, 400)}ms`,
+                } as React.CSSProperties
+              }
             >
               {fields.map((field, column) => (
                 <Td
@@ -231,7 +257,9 @@ export function ResourceTable({
           ))}
 
           {rows.length === 0 ? (
-            <EmptyRow colSpan={fields.length + 1}>Nothing configured yet.</EmptyRow>
+            <EmptyRow colSpan={fields.length + 1}>
+              Nothing configured yet.
+            </EmptyRow>
           ) : null}
         </DataTable>
       </div>
@@ -239,103 +267,55 @@ export function ResourceTable({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="rounded-xl">
           <DialogHeader>
-            <DialogTitle>{editing ? `Edit ${title}` : `New ${title}`}</DialogTitle>
+            <DialogTitle>
+              {editing ? `Edit ${title}` : `New ${title}`}
+            </DialogTitle>
             <DialogDescription>
               {editing
-                ? "Changes are recorded in the audit trail."
-                : "This is added to the catalog immediately."}
+                ? "Changes take effect immediately and are recorded in the audit trail."
+                : "This takes effect as soon as you create it."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-3">
-            {fields.map((field) => {
-              const locked = Boolean(editing && field.immutable);
+          <div className="flex max-h-[60vh] flex-col gap-5 overflow-y-auto pr-1">
+            {sections.map((section) => (
+              <section key={section.name} className="flex flex-col gap-2.5">
+                {/* A heading only earns its space when there is more than one
+                    section to tell apart. */}
+                {sections.length > 1 ? (
+                  <h3 className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                    {section.name}
+                  </h3>
+                ) : null}
 
-              return (
-                <label key={field.key} className="flex flex-col gap-1">
-                  <span className="text-[11px] text-muted-foreground">
-                    {field.label}
-                    {field.required ? " *" : ""}
-                    {locked ? " (cannot be changed)" : ""}
-                  </span>
-
-                  {field.type === "boolean" ? (
-                    <span className="flex h-8 items-center">
-                      <input
-                        type="checkbox"
-                        checked={draft[field.key] === "true"}
-                        disabled={locked}
-                        onChange={(event) =>
-                          setDraft((d) => ({
-                            ...d,
-                            [field.key]: String(event.target.checked),
-                          }))
-                        }
-                        className="size-4 accent-indigo-500 disabled:opacity-60"
-                      />
-                    </span>
-                  ) : field.type === "reference" ? (
-                    <select
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+                  {section.fields.map((field) => (
+                    <FieldEditor
+                      key={field.key}
+                      field={field}
                       value={draft[field.key] ?? ""}
-                      disabled={locked}
-                      onChange={(event) =>
-                        setDraft((d) => ({ ...d, [field.key]: event.target.value }))
+                      locked={Boolean(editing && field.immutable)}
+                      options={references[field.key]}
+                      excluded={
+                        field.distinctFrom
+                          ? draft[field.distinctFrom]
+                          : undefined
                       }
-                      className="h-8 rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60"
-                    >
-                      {/* Always offered, even on a required field: the API
-                          rejects the blank with the field's own name, which
-                          reads better than a dropdown that pre-picked something
-                          nobody chose. */}
-                      <option value="">
-                        {field.required ? "Choose…" : "None"}
-                      </option>
-                      {(references[field.key] ?? []).map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : field.type === "select" && field.options ? (
-                    <select
-                      value={draft[field.key] ?? ""}
-                      disabled={locked}
-                      onChange={(event) =>
-                        setDraft((d) => ({ ...d, [field.key]: event.target.value }))
+                      onChange={(next) =>
+                        setDraft((d) => ({ ...d, [field.key]: next }))
                       }
-                      className="h-8 rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60"
-                    >
-                      {field.options.map((option) => (
-                        <option key={option} value={option}>
-                          {option.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={field.type === "number" ? "number" : "text"}
-                      value={draft[field.key] ?? ""}
-                      disabled={locked}
-                      min={field.min}
-                      max={field.max}
-                      onChange={(event) =>
-                        setDraft((d) => ({ ...d, [field.key]: event.target.value }))
-                      }
-                      className="h-8 rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60"
                     />
-                  )}
-
-                  {field.hint ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      {field.hint}
-                    </span>
-                  ) : null}
-                </label>
-              );
-            })}
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
 
-          {error && open ? <Notice tone="danger">{error}</Notice> : null}
+          {error && open ? (
+            <div className="pt-1">
+              <Notice tone="danger">{error}</Notice>
+            </div>
+          ) : null}
 
           <DialogFooter>
             <button
@@ -368,7 +348,8 @@ function render(
   const value = row[field.key];
 
   // A flag reads before the empty check: false is an answer, not a blank.
-  if (field.type === "boolean") return value === true || value === "true" ? "Yes" : "No";
+  if (field.type === "boolean")
+    return value === true || value === "true" ? "Yes" : "No";
 
   if (value === null || value === undefined || value === "") return "—";
 
@@ -386,4 +367,130 @@ function render(
   if (field.type === "select") return String(value).replace(/_/g, " ");
 
   return String(value);
+}
+
+/**
+ * One labelled input in the config editor.
+ *
+ * Pulled out of the dialog because the dialog was becoming a single expression
+ * with four nested ternaries in it, and because every field type now has a
+ * little behaviour of its own — an exclusion list, a datalist, a lock.
+ */
+function FieldEditor({
+  field,
+  value,
+  locked,
+  options,
+  excluded,
+  onChange,
+}: {
+  field: EntityField;
+  value: string;
+  locked: boolean;
+  options?: { value: string; label: string }[];
+  /** A value chosen elsewhere that must not be offered here. */
+  excluded?: string;
+  onChange: (next: string) => void;
+}) {
+  const input =
+    "h-8 w-full rounded-lg bg-muted/60 px-2.5 text-xs outline-none ring-1 ring-transparent transition focus-visible:bg-background focus-visible:ring-indigo-500 disabled:opacity-60";
+
+  const listId = field.suggestFrom ? `${field.key}-options` : undefined;
+
+  return (
+    <label
+      className={cn(
+        "flex flex-col gap-1",
+        field.width === "half" ? "col-span-1" : "col-span-2",
+      )}
+    >
+      <span className="text-[11px] font-medium">
+        {field.label}
+        {field.required ? <span className="text-destructive"> *</span> : null}
+        {locked ? (
+          <span className="font-normal text-muted-foreground">
+            {" "}
+            (cannot be changed)
+          </span>
+        ) : null}
+      </span>
+
+      {field.type === "boolean" ? (
+        <span className="flex h-8 items-center">
+          <input
+            type="checkbox"
+            checked={value === "true"}
+            disabled={locked}
+            onChange={(event) => onChange(String(event.target.checked))}
+            className="size-4 accent-indigo-500 disabled:opacity-60"
+          />
+        </span>
+      ) : field.type === "reference" ? (
+        <select
+          value={value}
+          disabled={locked}
+          onChange={(event) => onChange(event.target.value)}
+          className={input}
+        >
+          {/* Offered even on a required field: the API rejects the blank by
+              name, which reads better than a dropdown that pre-picked
+              something nobody chose. */}
+          <option value="">{field.required ? "Choose…" : "None"}</option>
+          {(options ?? [])
+            // Whatever the paired field holds is not a valid answer here, so it
+            // is not offered. The row already chosen stays listed if it is the
+            // current value, or the select would silently blank itself.
+            .filter(
+              (option) => option.value !== excluded || option.value === value,
+            )
+            .map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+        </select>
+      ) : field.type === "select" && field.options ? (
+        <select
+          value={value}
+          disabled={locked}
+          onChange={(event) => onChange(event.target.value)}
+          className={input}
+        >
+          {field.options.map((option) => (
+            <option key={option} value={option}>
+              {option.replace(/_/g, " ")}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <>
+          <input
+            type={field.type === "number" ? "number" : "text"}
+            value={value}
+            disabled={locked}
+            min={field.min}
+            max={field.max}
+            list={listId}
+            onChange={(event) => onChange(event.target.value)}
+            className={input}
+          />
+          {/* Suggestions, not a closed list: a desk naming a category it is
+              about to introduce is legitimate. */}
+          {listId ? (
+            <datalist id={listId}>
+              {(options ?? []).map((option) => (
+                <option key={option.value} value={option.value} />
+              ))}
+            </datalist>
+          ) : null}
+        </>
+      )}
+
+      {field.hint ? (
+        <span className="text-[10px] leading-snug text-muted-foreground">
+          {field.hint}
+        </span>
+      ) : null}
+    </label>
+  );
 }

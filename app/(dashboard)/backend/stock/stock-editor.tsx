@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowsClockwiseIcon, WarehouseIcon, WarningIcon } from "@phosphor-icons/react";
+import {
+  ArrowsClockwiseIcon,
+  WarehouseIcon,
+  WarningIcon,
+} from "@phosphor-icons/react";
 import { STOCK_HEALTH_LABELS, type StockHealth } from "@/lib/business-logic";
 import { formatNumber } from "@/lib/quotations";
 import { cellKey, type StockBoard } from "@/lib/stock";
@@ -49,13 +53,15 @@ export function StockEditor({
   const router = useRouter();
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<
-    { tone: "ok" | "error"; text: string } | null
-  >(null);
+  const [message, setMessage] = useState<{
+    tone: "ok" | "error";
+    text: string;
+  } | null>(null);
 
   /** Cells whose typed value differs from what is stored. */
   const pending = useMemo(() => {
-    const out: { warehouseId: string; productId: string; available: number }[] = [];
+    const out: { warehouseId: string; productId: string; available: number }[] =
+      [];
 
     for (const [key, raw] of Object.entries(edits)) {
       const cell = board.cells[key];
@@ -127,65 +133,90 @@ export function StockEditor({
           icon={WarningIcon}
           title="Needs reordering"
           caption={
-            board.reorders.length === 0
-              ? "Every line with a reorder rule is above its point"
-              : "Below or at the reorder point, emptiest first"
+            board.rulesMissing
+              ? "Reorder rules are not set up in this database yet"
+              : board.reorders.length === 0
+                ? "Every line with a reorder rule is above its point"
+                : "Below or at the reorder point, emptiest first"
           }
         >
-          <Link
-            href="/backend/replenishment"
-            className="flex h-8 items-center rounded-lg bg-muted px-3 text-[11px] font-medium transition-colors hover:bg-muted/70"
-          >
-            Reorder rules
-          </Link>
+          {board.rulesMissing ? null : (
+            <Link
+              href="/backend/replenishment"
+              className="flex h-8 items-center rounded-lg bg-muted px-3 text-[11px] font-medium transition-colors hover:bg-muted/70"
+            >
+              Reorder rules
+            </Link>
+          )}
         </PanelHeader>
 
-        <div className="mt-3">
-          <DataTable
-            minWidth="48rem"
-            head={
-              <>
-                <Th>Product</Th>
-                <Th className="w-32">Warehouse</Th>
-                <Th className="w-24 text-right">On hand</Th>
-                <Th className="w-24 text-right">Reorder at</Th>
-                <Th className="w-24 text-right">Order</Th>
-                <Th className="w-28">Arrives</Th>
-              </>
-            }
-          >
-            {board.reorders.map((row) => (
-              <Tr key={cellKey(row.warehouseId, row.productId)}>
-                <Td className="font-medium">{row.productName}</Td>
-                <Td className="text-muted-foreground">{row.warehouseName}</Td>
-                <Td
-                  className={cn(
-                    "text-right font-medium tabular-nums",
-                    HEALTH_STYLES[row.health],
-                  )}
-                >
-                  {formatNumber(row.available)}
-                </Td>
-                <Td className="text-right tabular-nums text-muted-foreground">
-                  {formatNumber(row.reorderPoint)}
-                </Td>
-                <Td className="text-right font-medium tabular-nums">
-                  {formatNumber(row.orderQty)}
-                </Td>
-                <Td className="text-[11px] text-muted-foreground">
-                  {row.arrivesOn}
-                </Td>
-              </Tr>
-            ))}
+        {board.rulesMissing ? (
+          <div className="mt-3">
+            <Notice>
+              This database predates the reorder rules feature, so the
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[10px]">
+                replenishment_rules
+              </code>
+              table is missing. Stock levels below are live and editable. To
+              turn this panel on, run
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[10px]">
+                db/repair.sql
+              </code>
+              in the Supabase SQL editor, then reload. For the sample rules,
+              follow it with
+              <code className="mx-1 rounded bg-muted px-1 py-0.5 text-[10px]">
+                db/migrations/seed-reorder-rules.sql
+              </code>
+            </Notice>
+          </div>
+        ) : (
+          <div className="mt-3">
+            <DataTable
+              minWidth="48rem"
+              head={
+                <>
+                  <Th>Product</Th>
+                  <Th className="w-32">Warehouse</Th>
+                  <Th className="w-24 text-right">On hand</Th>
+                  <Th className="w-24 text-right">Reorder at</Th>
+                  <Th className="w-24 text-right">Order</Th>
+                  <Th className="w-28">Arrives</Th>
+                </>
+              }
+            >
+              {board.reorders.map((row) => (
+                <Tr key={cellKey(row.warehouseId, row.productId)}>
+                  <Td className="font-medium">{row.productName}</Td>
+                  <Td className="text-muted-foreground">{row.warehouseName}</Td>
+                  <Td
+                    className={cn(
+                      "text-right font-medium tabular-nums",
+                      HEALTH_STYLES[row.health],
+                    )}
+                  >
+                    {formatNumber(row.available)}
+                  </Td>
+                  <Td className="text-right tabular-nums text-muted-foreground">
+                    {formatNumber(row.reorderPoint)}
+                  </Td>
+                  <Td className="text-right font-medium tabular-nums">
+                    {formatNumber(row.orderQty)}
+                  </Td>
+                  <Td className="text-[11px] text-muted-foreground">
+                    {row.arrivesOn}
+                  </Td>
+                </Tr>
+              ))}
 
-            {board.reorders.length === 0 ? (
-              <EmptyRow colSpan={6}>
-                Nothing needs reordering. Lines with no reorder rule are not
-                checked — add one on the Reorder rules screen.
-              </EmptyRow>
-            ) : null}
-          </DataTable>
-        </div>
+              {board.reorders.length === 0 ? (
+                <EmptyRow colSpan={6}>
+                  Nothing needs reordering. Lines with no reorder rule are not
+                  checked — add one on the Reorder rules screen.
+                </EmptyRow>
+              ) : null}
+            </DataTable>
+          </div>
+        )}
       </Panel>
 
       <Panel delay={80}>

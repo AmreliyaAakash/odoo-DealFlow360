@@ -10,6 +10,8 @@ import {
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 import { formatCurrency, formatNumber } from "@/lib/quotations";
+import { useRole } from "@/lib/use-role";
+import type { Module } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { FinanceStats } from "./types";
 
@@ -21,6 +23,12 @@ type Tile = {
   tint: string;
   caption: string;
   href: string;
+  /**
+   * The module behind the screen this tile opens. A tile is a link with a
+   * number on it, so a viewer without the module would be shown a figure they
+   * may not read and a link that redirects.
+   */
+  module: Module;
   /** Tint the figure red once non-zero. */
   alarm?: boolean;
 };
@@ -29,6 +37,7 @@ export function FinanceStatCards({ stats }: { stats: FinanceStats }) {
   const tiles: Tile[] = [
     {
       label: "Pending Finance Approvals",
+      module: "approvals",
       value: stats.pendingFinanceApprovals,
       format: "count",
       icon: SealCheckIcon,
@@ -38,6 +47,7 @@ export function FinanceStatCards({ stats }: { stats: FinanceStats }) {
     },
     {
       label: "Active Subscriptions",
+      module: "billing",
       value: stats.activeSubscriptions,
       format: "count",
       icon: ArrowsClockwiseIcon,
@@ -47,6 +57,7 @@ export function FinanceStatCards({ stats }: { stats: FinanceStats }) {
     },
     {
       label: "Backordered Items",
+      module: "warehouseSplit",
       value: stats.backorderedItems,
       format: "count",
       icon: PackageIcon,
@@ -57,6 +68,7 @@ export function FinanceStatCards({ stats }: { stats: FinanceStats }) {
     },
     {
       label: "Monthly Recurring Revenue",
+      module: "billing",
       value: stats.mrr,
       format: "currency",
       icon: CurrencyInrIcon,
@@ -66,9 +78,14 @@ export function FinanceStatCards({ stats }: { stats: FinanceStats }) {
     },
   ];
 
+  // Same matrix the pages and the API read, so a tile appears exactly when
+  // the screen behind it would open.
+  const { canView } = useRole();
+  const visible = tiles.filter((tile) => canView(tile.module));
+
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {tiles.map((tile, index) => (
+      {visible.map((tile, index) => (
         <StatCard key={tile.label} tile={tile} index={index} />
       ))}
     </div>

@@ -1,0 +1,157 @@
+{
+  "report": [
+    {
+      "area": "routes",
+      "name": "manager /quotations",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "finance /quotations",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "rep /approvals",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "manager /fulfillment",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "rep /fulfillment",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "manager /invoices",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "rep /invoices",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "finance /deal-health",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "rep /reports",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "manager /discount-setup",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "finance /discount-setup",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "manager /backend/warehouses",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "rep /backend/warehouses",
+      "pass": false,
+      "detail": "LEAK: reached it"
+    },
+    {
+      "area": "routes",
+      "name": "route matrix (only mismatches listed above)",
+      "pass": true,
+      "detail": "12 routes x 5 roles checked"
+    },
+    {
+      "area": "quotation",
+      "name": "raise a quotation",
+      "pass": "skip",
+      "detail": "need a product and a customer (product=true, customer=false)"
+    },
+    {
+      "area": "approvals",
+      "name": "reject path",
+      "pass": "skip",
+      "detail": "no seed material"
+    },
+    {
+      "area": "approvals",
+      "name": "return path",
+      "pass": "skip",
+      "detail": "no seed material"
+    },
+    {
+      "area": "reports",
+      "name": "reports endpoint returns data",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "area": "diagnostics",
+      "name": "diagnostics endpoint",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "area": "upsell",
+      "name": "upsell suggestions endpoint",
+      "pass": true,
+      "detail": "status 200"
+    },
+    {
+      "area": "stock",
+      "name": "stock PATCH accepts an empty change set",
+      "pass": false,
+      "detail": "status 400"
+    },
+    {
+      "area": "permissions",
+      "name": "read a user's permission matrix",
+      "pass": "skip",
+      "detail": "no user id available"
+    },
+    {
+      "area": "portal",
+      "name": "customer lands in the portal",
+      "pass": true,
+      "detail": "http://localhost:3000/portal/10edd087-5ec6-4c6b-b9c1-7e337d3b9d51"
+    },
+    {
+      "area": "portal",
+      "name": "portal renders without an error notice",
+      "pass": false,
+      "detail": "clean"
+    },
+    {
+      "area": "portal",
+      "name": "customer blocked from /quotations",
+      "pass": true,
+      "detail": "landed /portal/10edd087-5ec6-4c6b-b9c1-7e337d3b9d51"
+    }
+  ],
+  "created": {
+    "quotations": []
+  }
+}

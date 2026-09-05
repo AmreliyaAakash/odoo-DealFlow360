@@ -67,6 +67,7 @@ export const LANDING_BY_ROLE: Record<Role, string> = {
   manager: "/dashboard",
   finance: "/dashboard",
   rep: "/dashboard",
+  specialist: "/dashboard",
   customer: "/portal",
 };
 

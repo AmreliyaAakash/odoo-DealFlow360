@@ -4,6 +4,7 @@ import { CADENCE_MONTHS } from "@/lib/business-logic";
 import { requireModule } from "@/lib/page-guard";
 import { formatCurrency } from "@/lib/quotations";
 import { loadSubscriptions } from "@/lib/subscriptions-server";
+import { schemaGap } from "@/lib/schema-gap";
 import { cn } from "@/lib/utils";
 import {
   DataTable,
@@ -16,6 +17,7 @@ import {
   Th,
   Tr,
 } from "@/components/dashboard/panel";
+import { SchemaGapNotice } from "@/components/dashboard/schema-gap-notice";
 
 /**
  * Screen 9 — every recurring plan across every customer, whichever order it
@@ -24,6 +26,7 @@ import {
 export default async function SubscriptionsPage() {
   const actor = await requireModule("billing");
   const book = await loadSubscriptions();
+  const gap = schemaGap({ message: book.error ?? undefined });
 
   return (
     <main className="flex min-w-0 flex-1 flex-col gap-4">
@@ -42,7 +45,16 @@ export default async function SubscriptionsPage() {
         ) : null}
       </PageHeader>
 
-      {book.error ? <Notice tone="danger">{book.error}</Notice> : null}
+      {/* A database that predates the subscriptions table is a setup step
+          outstanding, not a failure, and gets the file to run rather than
+          PostgREST's "schema cache" wording. */}
+      {book.error ? (
+        gap ? (
+          <SchemaGapNotice gap={gap} />
+        ) : (
+          <Notice tone="danger">{book.error}</Notice>
+        )
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Count tone="ok" label={`${book.counts.active} Active`} />

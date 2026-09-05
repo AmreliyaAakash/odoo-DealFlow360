@@ -52,7 +52,7 @@ const ROUTE_ROLES: { matcher: ReturnType<typeof createRouteMatcher>; roles: Role
   // still calls requireCapability and renders a refusal of its own.
   {
     matcher: createRouteMatcher(["/backend(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
 
   { matcher: createRouteMatcher(["/manager(.*)"]), roles: ["manager", "admin"] },
@@ -61,27 +61,27 @@ const ROUTE_ROLES: { matcher: ReturnType<typeof createRouteMatcher>; roles: Role
   // Reps own the desk; approvers look in on it.
   {
     matcher: createRouteMatcher(["/rep(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
 
   // A rep reaches reports, but only ever sees their own rows — that narrowing is
   // done in the query, not here.
   {
     matcher: createRouteMatcher(["/reports(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
 
   {
     matcher: createRouteMatcher(["/approvals(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
   {
     matcher: createRouteMatcher(["/quotations(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
   {
     matcher: createRouteMatcher(["/deal-health(.*)"]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
 
   // The entity screens the whole desk shares. Every staff role may reach the
@@ -99,7 +99,7 @@ const ROUTE_ROLES: { matcher: ReturnType<typeof createRouteMatcher>; roles: Role
       "/products(.*)",
       "/discount-setup(.*)",
     ]),
-    roles: ["rep", "manager", "finance", "admin"],
+    roles: ["rep", "manager", "finance", "specialist", "admin"],
   },
 
   // The portal belongs to the customer. Staff have their own screens onto the
@@ -158,6 +158,9 @@ export default clerkMiddleware(async (auth, request) => {
     manager: "/manager",
     finance: "/finance",
     rep: "/rep",
+    // No desk of their own to be sent back to, so a specialist turned away from
+    // a route lands on the shared dashboard.
+    specialist: "/dashboard",
     customer: "/portal",
   };
 

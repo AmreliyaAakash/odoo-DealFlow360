@@ -11,7 +11,14 @@
 
 import type { Role } from "@/types/globals";
 
-export const ROLES = ["rep", "manager", "finance", "customer", "admin"] as const;
+export const ROLES = [
+  "rep",
+  "manager",
+  "finance",
+  "specialist",
+  "customer",
+  "admin",
+] as const;
 
 /* ------------------------------------------------------------------ *
  * Capability model
@@ -105,6 +112,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: view(),
     manager: view(),
     finance: view(),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -112,6 +120,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: none,
     manager: write(),
     finance: write("all", "Second-level tiers, above the manager's own limit"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -119,6 +128,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: none,
     manager: none,
     finance: full(),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -126,6 +136,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: none,
     manager: none,
     finance: full(),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -133,6 +144,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: none,
     manager: none,
     finance: none,
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -142,6 +154,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: view("own"),
     manager: view("team"),
     finance: view("all", "Financial reporting across the company"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -149,6 +162,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: full("own"),
     manager: view("all", "Review only — approvers do not edit a rep's quote"),
     finance: view("all", "Review only"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -156,6 +170,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: view("own", "Status only — a rep never decides on their own deal"),
     manager: write("all", "Level 1"),
     finance: write("all", "Level 2, the high-risk tier"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -163,6 +178,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: { capability: "use", scope: "own" },
     manager: none,
     finance: none,
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -170,6 +186,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: write("own", "May override the suggested split on their own quote"),
     manager: view(),
     finance: full("all", "Manages allocation across every warehouse"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -177,6 +194,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: view(),
     manager: view(),
     finance: write("all", "Reconciles billing"),
+    specialist: none,
     customer: none,
     admin: full(),
   },
@@ -184,6 +202,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: write("own", "Responds to their own customers in the thread"),
     manager: none,
     finance: none,
+    specialist: none,
     customer: full("own", "Sees and negotiates only their own quotation"),
     // Deliberately none: the portal is the customer's space, and an admin has
     // every other screen through which to see the same deal.
@@ -193,6 +212,7 @@ export const PERMISSIONS: Record<Module, Record<Role, Access>> = {
     rep: view("own"),
     manager: view("all", "Full monitoring across the team"),
     finance: view("all", "The deals financially relevant to them"),
+    specialist: none,
     customer: none,
     admin: full(),
   },

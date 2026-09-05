@@ -74,3 +74,37 @@ const out = [
 
 writeFileSync(join(here, "setup.sql"), out + "\n");
 console.log(`db/setup.sql rebuilt (${out.split("\n").length} lines)`);
+
+/**
+ * The same thing minus the sample rows, for a database that already has real
+ * data in it and is only missing structure.
+ *
+ * The role defaults are not optional here, which is the whole reason this is a
+ * separate file rather than "just run schema.sql". `effective_capability()`
+ * reads `role_module_permissions` and falls back to 'none', not to the static
+ * matrix in lib/permissions.ts — that fallback is app-side only. Creating the
+ * table empty therefore denies every non-admin every module, which looks
+ * exactly like the missing-data bug you ran this to fix.
+ */
+const repairHeader = `-- ============================================================================
+-- DealFlow360 — structure repair. Paste into Supabase → SQL Editor → Run.
+--
+-- For a database that predates part of schema.sql: creates whatever tables,
+-- columns, functions and policies are missing and seeds the role permission
+-- defaults, WITHOUT inserting the sample catalogue or the demo quotations.
+-- Your own rows are left alone.
+--
+-- Idempotent: every statement is guarded, so re-running is safe. The one thing
+-- to know before running is that schema.sql drops duplicate \`name\` rows in
+-- discount_rules, subscription_plans, customers and upsell_rules (keeping the
+-- oldest) so it can put unique indexes on that column.
+--
+-- GENERATED FILE — do not edit. Source: schema.sql
+-- Rebuild with: npm run db:build
+-- ============================================================================
+`;
+
+const repair = [repairHeader, read("schema.sql"), rolePermissionSeed()].join("\n\n");
+
+writeFileSync(join(here, "repair.sql"), repair + "\n");
+console.log(`db/repair.sql rebuilt (${repair.split("\n").length} lines)`);

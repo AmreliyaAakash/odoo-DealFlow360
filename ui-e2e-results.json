@@ -1,0 +1,121 @@
+{
+  "report": [
+    {
+      "area": "ui-create",
+      "name": "New opens the form",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "area": "ui-create",
+      "name": "row appears in the table after Create",
+      "pass": true,
+      "detail": "8 -> 9 rows"
+    },
+    {
+      "area": "ui-create",
+      "name": "row SURVIVES a full page reload (backend persisted)",
+      "pass": true,
+      "detail": "read back from Postgres"
+    },
+    {
+      "area": "ui-edit",
+      "name": "edited name shows in the table",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "area": "ui-edit",
+      "name": "edit SURVIVES a reload",
+      "pass": true,
+      "detail": "persisted"
+    },
+    {
+      "area": "ui-delete",
+      "name": "row still listed after Deactivate (soft delete)",
+      "pass": true,
+      "detail": "row retained"
+    },
+    {
+      "area": "ui-delete",
+      "name": "row is shown as deactivated (dimmed + button disabled)",
+      "pass": true,
+      "detail": "dimmed=true deactivateDisabled=true"
+    },
+    {
+      "area": "ui-access",
+      "name": "admin gets the warehouses config with New",
+      "pass": true,
+      "detail": "New button: 1"
+    },
+    {
+      "area": "ui-access",
+      "name": "finance gets the warehouses config with New",
+      "pass": true,
+      "detail": "New button: 1"
+    },
+    {
+      "area": "ui-access",
+      "name": "manager is denied the warehouses config",
+      "pass": true,
+      "detail": "access notice shown"
+    },
+    {
+      "area": "ui-access",
+      "name": "rep is denied the warehouses config",
+      "pass": true,
+      "detail": "access notice shown"
+    },
+    {
+      "area": "ui-nav",
+      "name": "admin sidebar",
+      "pass": true,
+      "detail": "Dashboard · Admin Desk · Quotations · Approvals · Fulfillment · Subscriptions · Invoices · Deal Health · Reports · Products · Upsell Suggestions · Dis"
+    },
+    {
+      "area": "ui-nav",
+      "name": "manager sidebar",
+      "pass": true,
+      "detail": "Dashboard · Manager Desk · Quotations · Approvals · Fulfillment · Subscriptions · Invoices · Deal Health · Reports · Products · Discount & Approvals ·"
+    },
+    {
+      "area": "ui-nav",
+      "name": "finance sidebar",
+      "pass": true,
+      "detail": "Dashboard · Finance Desk · Quotations · Approvals · Fulfillment · Subscriptions · Invoices · Deal Health · Reports · Products · Warehouses · Stock Lev"
+    },
+    {
+      "area": "ui-nav",
+      "name": "rep sidebar",
+      "pass": true,
+      "detail": "Dashboard · My Desk · Quotations · Approvals · Fulfillment · Subscriptions · Invoices · Deal Health · Reports · Products · Upsell Suggestions · Vertex"
+    },
+    {
+      "area": "ui-nav",
+      "name": "customer gets no internal sidebar",
+      "pass": true,
+      "detail": "aside count 0"
+    },
+    {
+      "area": "ui-stock",
+      "name": "Save button enables once a cell changes",
+      "pass": true,
+      "detail": "40 -> 41"
+    },
+    {
+      "area": "ui-stock",
+      "name": "typed figure SURVIVES a reload",
+      "pass": true,
+      "detail": "reloaded value 41, expected 41"
+    },
+    {
+      "area": "ui-stock",
+      "name": "original figure restored",
+      "pass": true,
+      "detail": "back to 40"
+    }
+  ],
+  "leftovers": [
+    "warehouses: \"E2E UI 3241676\" / code EU324167"
+  ]
+}

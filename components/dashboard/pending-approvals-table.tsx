@@ -23,7 +23,7 @@ export function PendingApprovalsTable({
   deals,
   title = "Pending Approvals",
   delay = 320,
-  canDecide = true,
+  canDecide,
   emptyText = "Nothing is waiting on you.",
 }: {
   deals: PendingApproval[];
@@ -34,8 +34,14 @@ export function PendingApprovalsTable({
    * move through the queue but never decides on one, so the controls are absent
    * rather than present-and-disabled: a disabled Approve reads as "not yet",
    * which is the wrong story.
+   *
+   * Required, with no default. It used to default to true, and the manager
+   * dashboard took that default — so an approver whose `approvals` module had
+   * been revoked was still shown live Approve / Reject / Return buttons. The API
+   * refused the write, but the buttons should never have been there. A missing
+   * answer is now a type error rather than the most permissive one.
    */
-  canDecide?: boolean;
+  canDecide: boolean;
   emptyText?: string;
 }) {
   const router = useRouter();

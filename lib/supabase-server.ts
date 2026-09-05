@@ -2,11 +2,9 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
     "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   );
@@ -21,5 +19,10 @@ if (!supabaseUrl || !supabaseKey) {
  * template. See `lib/supabase.ts` for the setup both sides require.
  */
 export function createServerSupabaseClient(): SupabaseClient {
-  return createClient(supabaseUrl!, supabaseKey!);
+  return createClient(supabaseUrl!, supabasePublishableKey!, {
+    accessToken: async () => {
+      const { getToken } = await auth();
+      return getToken();
+    },
+  });
 }

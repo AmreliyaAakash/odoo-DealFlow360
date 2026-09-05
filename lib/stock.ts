@@ -51,6 +51,8 @@ export type StockBoard = {
   /** `${warehouseId}:${productId}` → cell. Absent means nothing on hand. */
   cells: Record<string, StockCell>;
   reorders: ReorderSuggestion[];
+  /** True when replenishment_rules is not in the database yet. */
+  rulesMissing: boolean;
   error: string | null;
 };
 
