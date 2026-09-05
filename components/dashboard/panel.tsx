@@ -137,7 +137,7 @@ export function DataTable({
   minWidth?: string;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overscroll-x-contain touch-pan-y">
       <table
         className="w-full border-collapse text-xs"
         style={{ minWidth }}

@@ -122,12 +122,19 @@
     @apply border-border outline-ring/50;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html {
+    @apply font-mono scroll-smooth;
   }
 
-  html {
-    @apply font-mono;
+  body {
+    @apply bg-background text-foreground min-h-screen;
+  }
+
+  /* Prevent horizontal scroll areas from trapping vertical wheel/trackpad scrolling */
+  .overflow-x-auto {
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
   }
 }
 /* ---------------------------------------------------------------- */

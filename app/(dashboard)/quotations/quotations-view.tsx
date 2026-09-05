@@ -103,7 +103,7 @@ function Board({ deals }: { deals: PipelineDeal[] }) {
   return (
     // Horizontal scroll rather than wrapping: a stage that drops onto a second
     // row stops reading as a step in a sequence.
-    <div className="-mx-1 overflow-x-auto px-1 pb-1">
+    <div className="-mx-1 overflow-x-auto overscroll-x-contain touch-pan-y px-1 pb-1">
       <div className="grid min-w-[64rem] grid-cols-5 gap-3">
         {STAGES.map((stage, index) => {
           const inStage = deals.filter((deal) => deal.status === stage);

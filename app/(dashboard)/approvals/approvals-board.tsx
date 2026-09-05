@@ -190,7 +190,7 @@ function SettledTable({
               <Td className="font-medium">
                 <Link
                   href={`/approvals/${row.id}`}
-                  className="hover:text-amber-600 dark:hover:text-amber-400"
+                  className="text-foreground hover:text-foreground/80 hover:underline underline-offset-2 transition-colors"
                 >
                   {row.reference}
                 </Link>

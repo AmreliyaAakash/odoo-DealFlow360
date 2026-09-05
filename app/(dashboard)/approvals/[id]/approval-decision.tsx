@@ -131,7 +131,7 @@ export function ApprovalDecision({
               type="button"
               disabled={busy !== null}
               onClick={() => void decide("approve")}
-              className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              className="rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-medium text-zinc-50 shadow-xs transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               {busy === "approve" ? "Approving..." : "Approve"}
             </button>
@@ -139,7 +139,7 @@ export function ApprovalDecision({
               type="button"
               disabled={busy !== null}
               onClick={() => void decide("return")}
-              className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-amber-400 disabled:opacity-50"
+              className="rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               {busy === "return" ? "Returning..." : "Return for revision"}
             </button>
@@ -147,7 +147,7 @@ export function ApprovalDecision({
               type="button"
               disabled={busy !== null}
               onClick={() => void decide("reject")}
-              className="rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-red-400 disabled:opacity-50"
+              className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3.5 py-2 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-500/20 disabled:opacity-50 dark:bg-rose-500/20 dark:text-rose-400"
             >
               {busy === "reject" ? "Rejecting..." : "Reject"}
             </button>

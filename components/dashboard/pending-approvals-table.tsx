@@ -104,7 +104,7 @@ export function PendingApprovalsTable({
         </div>
       ) : null}
 
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3 overflow-x-auto overscroll-x-contain touch-pan-y">
         <table className="w-full min-w-[54rem] border-collapse text-xs">
           <thead>
             <tr className="text-left text-[11px] text-muted-foreground">
@@ -212,7 +212,7 @@ function DealRows({
               one click further on from there. */}
           <Link
             href={`/approvals/${deal.id}`}
-            className="font-medium hover:text-amber-600 dark:hover:text-amber-400"
+            className="font-medium text-foreground hover:text-foreground/80 hover:underline underline-offset-2 transition-colors"
           >
             {deal.repName}
           </Link>
@@ -234,7 +234,7 @@ function DealRows({
               {deal.requiredApprovals.map((level) => (
                 <span
                   key={level}
-                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize"
+                  className="rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground border border-border/40"
                 >
                   {level}
                 </span>
@@ -268,7 +268,7 @@ function DealRows({
 
         <td className="px-2 py-2.5 text-right">
           {hasViolations ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+            <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/20">
               <WarningIcon size={10} weight="fill" />
               {deal.violatingLines.length}
             </span>
@@ -331,7 +331,7 @@ function DealRows({
                         <span className="text-[11px] tabular-nums text-muted-foreground">
                           {line.qty} × {formatCurrency(line.unitPrice)}
                         </span>
-                        <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-red-600 dark:text-red-400">
+                        <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-rose-600 dark:text-rose-400 border border-rose-500/20">
                           {line.discountPct.toFixed(1)}%
                         </span>
                         <span className="ml-auto text-[11px] text-muted-foreground">
@@ -351,9 +351,12 @@ function DealRows({
 }
 
 const TONES = {
-  approve: "bg-emerald-500 text-white hover:bg-emerald-400",
-  reject: "bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400",
-  return: "bg-muted hover:bg-muted/70",
+  approve:
+    "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-500/20",
+  reject:
+    "bg-rose-500/10 text-rose-700 hover:bg-rose-500/20 dark:bg-rose-500/20 dark:text-rose-400 border border-rose-500/20",
+  return:
+    "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60",
 } as const;
 
 function DecisionButton({
@@ -373,7 +376,7 @@ function DecisionButton({
       onClick={onClick}
       disabled={busy}
       className={cn(
-        "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50",
+        "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50",
         TONES[tone],
       )}
     >
