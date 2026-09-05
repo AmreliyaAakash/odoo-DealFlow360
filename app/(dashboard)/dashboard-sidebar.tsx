@@ -18,8 +18,9 @@ import {
   UsersThreeIcon,
   WarehouseIcon,
 } from "@phosphor-icons/react";
-import { canView, type Module } from "@/lib/permissions";
+import { type Module } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/quotations";
+import { useRole } from "@/lib/use-role";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/globals";
 import type { WatchlistDeal } from "./rep/types";
@@ -152,6 +153,9 @@ const ROLE_LABELS: Record<string, string> = {
   manager: "Sales Manager",
   finance: "Finance",
   rep: "Sales Rep",
+  // A customer never reaches this sidebar — the route guard sends them to
+  // /portal — but the map stays exhaustive so a role can never render blank.
+  customer: "Customer",
   none: "No role",
 };
 
@@ -239,6 +243,7 @@ export function DashboardSidebar({
   watchlist: WatchlistDeal[];
 }) {
   const pathname = usePathname();
+  const { canView } = useRole();
 
   // A customer has no internal workspace at all. The route guard keeps them out
   // of /(dashboard), so this only matters if that ever loosens.
@@ -246,10 +251,10 @@ export function DashboardSidebar({
 
   const workspace = workspaceFor(role);
 
-  // Items are filtered by the same matrix the API enforces, so a role never sees
-  // a link to something it would be refused at.
+  // Filtered by the access the server resolved, so an account granted an extra
+  // module sees its link, and one that had a module revoked does not.
   const items = [...workspace.nav, REPORTS].filter(
-    (item) => item.module === undefined || canView(item.module, role),
+    (item) => item.module === undefined || canView(item.module),
   );
 
   return (

@@ -79,4 +79,6 @@ export type ManagedUser = {
   role: string | null;
   lastActiveAt: string | null;
   createdAt: string;
+  /** True when this account has module access of its own, apart from its role. */
+  customized: boolean;
 };

@@ -1,14 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import {
-  accessFor,
-  can,
-  canActAtLevel,
-  scopeFor,
-  type Capability,
-  type Module,
-  type Scope,
-} from "@/lib/permissions";
+import { canActAtLevel, type Capability, type Module, type Scope } from "@/lib/permissions";
+import { canWith, effectiveAccess, scopeWith } from "@/lib/permissions-server";
 import type { Role } from "@/types/globals";
 
 /**
@@ -158,13 +151,16 @@ export async function requireCapability(
   if (!userId) return deny(401, "Unauthorized");
   if (!role) return deny(403, "Your account has no role assigned");
 
-  if (!can(module, role, minimum)) {
-    const held = accessFor(module, role).capability;
+  // Resolved, not static: an account granted a module its role does not have
+  // passes here, and one that has had a module taken away does not.
+  const { access } = await effectiveAccess(userId, role);
+
+  if (!canWith(access, module, minimum)) {
     return deny(
       403,
-      `A ${role} has ${held} access here and needs ${minimum}`,
+      `A ${role} has ${access[module].capability} access here and needs ${minimum}`,
     );
   }
 
-  return { ok: true, actor: { userId, role, scope: scopeFor(module, role) } };
+  return { ok: true, actor: { userId, role, scope: scopeWith(access, module) } };
 }

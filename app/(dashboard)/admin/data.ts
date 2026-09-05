@@ -206,6 +206,23 @@ export async function loadManagedUsers(): Promise<{
       orderBy: "-created_at",
     });
 
+    // Which accounts carry access of their own, so the row can say so without
+    // a request per user.
+    const supabase = createServerSupabaseClient();
+    const { data: profiles } = await supabase
+      .from("user_permission_profiles")
+      .select("user_id, customized")
+      .returns<{ user_id: string; customized: boolean }[]>();
+    const { data: overrides } = await supabase
+      .from("user_module_permissions")
+      .select("user_id")
+      .returns<{ user_id: string }[]>();
+
+    const special = new Set<string>([
+      ...(profiles ?? []).filter((p) => p.customized).map((p) => p.user_id),
+      ...(overrides ?? []).map((o) => o.user_id),
+    ]);
+
     return {
       users: data.map((user) => ({
         id: user.id,
@@ -222,6 +239,7 @@ export async function loadManagedUsers(): Promise<{
           ? new Date(user.lastActiveAt).toISOString()
           : null,
         createdAt: new Date(user.createdAt).toISOString(),
+        customized: special.has(user.id),
       })),
       loadError: null,
     };
