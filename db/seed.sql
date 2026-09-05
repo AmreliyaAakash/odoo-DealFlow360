@@ -1,0 +1,70 @@
+-- DealFlow360 seed data: discount tiers, warehouses, products, subscription plans.
+-- Safe to re-run: every insert is keyed on a natural unique column.
+
+-- ============================================================ products
+
+insert into products (name, sku, category, list_price, cost, cadence) values
+  ('Rack Server R450',        'SRV-R450',  'Servers',     714000.00, 519000.00, 'one_time'),
+  ('Rack Server R650',        'SRV-R650',  'Servers',    1182000.00, 833000.00, 'one_time'),
+  ('Edge Node E20',           'SRV-E20',   'Servers',     272000.00, 200000.00, 'one_time'),
+  ('Core Switch 48P',         'NET-SW48',  'Networking',  391000.00, 268000.00, 'one_time'),
+  ('Access Switch 24P',       'NET-SW24',  'Networking',  157000.00, 105000.00, 'one_time'),
+  ('Firewall FG-200',         'NET-FW200', 'Networking',  442000.00, 306000.00, 'one_time'),
+  ('NVMe Array 24TB',         'STO-N24',   'Storage',     829000.00, 612000.00, 'one_time'),
+  ('Backup Vault 100TB',      'STO-B100',  'Storage',    1054000.00, 774000.00, 'one_time'),
+  ('Install & Commissioning', 'SVC-INST',  'Services',    204000.00, 128000.00, 'one_time'),
+  ('Support Plan Standard',   'SUB-STD',   'Support',      15300.00, 6000.00, 'monthly'),
+  ('Support Plan Premium',    'SUB-PRM',   'Support',      35700.00, 14000.00, 'monthly'),
+  ('Monitoring Suite',        'SUB-MON',   'Support',      22100.00, 8100.00, 'monthly')
+on conflict (sku) do nothing;
+
+-- ============================================================ discount tiers
+
+insert into discount_rules (name, scope, scope_ref, max_discount_pct, approval_level) values
+  ('Tier 1 — rep discretion',   'global',   null,         10.00, 'manager'),
+  ('Tier 2 — manager sign-off', 'global',   null,         25.00, 'finance'),
+  ('Tier 3 — finance sign-off', 'global',   null,         40.00, 'admin'),
+  ('Services floor',            'category', 'Services',   15.00, 'finance'),
+  ('Support floor',             'category', 'Support',    20.00, 'finance')
+on conflict do nothing;
+
+-- ============================================================ warehouses
+
+insert into warehouses (name, code, region, priority) values
+  ('Amsterdam DC',  'AMS', 'EMEA',     10),
+  ('Frankfurt DC',  'FRA', 'EMEA',     20),
+  ('Dallas DC',     'DFW', 'AMER',     30),
+  ('Singapore DC',  'SIN', 'APAC',     40)
+on conflict (code) do nothing;
+
+-- Stock: every product in every warehouse, so B6 has something to split across.
+insert into warehouse_stock (warehouse_id, product_id, available)
+select w.id,
+       p.id,
+       case w.code
+         when 'AMS' then 40
+         when 'FRA' then 25
+         when 'DFW' then 15
+         else 8
+       end
+from warehouses w
+cross join products p
+on conflict (warehouse_id, product_id) do nothing;
+
+-- ============================================================ subscription plans
+
+insert into subscription_plans (name, cadence, unit_price, min_term_months) values
+  ('Support Standard — Monthly', 'monthly',   15300.00, 12),
+  ('Support Premium — Monthly',  'monthly',   35700.00, 12),
+  ('Support Standard — Annual',  'annual',   166000.00, 12),
+  ('Support Premium — Annual',   'annual',   387000.00, 24),
+  ('Monitoring — Quarterly',     'quarterly',  63800.00, 12)
+on conflict do nothing;
+
+-- ============================================================ demo customer
+-- Set `portal_user_id` to a real Clerk user ID to exercise the portal (B8).
+
+insert into customers (name, email, portal_user_id) values
+  ('Northwind Logistics', 'ops@northwind.example', null),
+  ('Helios Manufacturing', 'it@helios.example',    null)
+on conflict do nothing;
