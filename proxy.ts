@@ -1,5 +1,6 @@
 import { clerkMiddleware, clerkClient, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { asRole } from "@/lib/roles";
 import type { Role } from "@/types/globals";
 
 /**
@@ -13,12 +14,6 @@ import type { Role } from "@/types/globals";
  * Row scoping happens in queries, and every write is refused again by the API
  * guards in `lib/auth.ts` and by RLS in the database.
  */
-
-const ROLES = new Set<string>(["admin", "manager", "finance", "rep", "customer"]);
-
-function asRole(value: unknown): Role | null {
-  return typeof value === "string" && ROLES.has(value) ? (value as Role) : null;
-}
 
 /**
  * Reachable without a session. The portal is included so a customer following a

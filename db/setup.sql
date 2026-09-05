@@ -73,6 +73,16 @@ create table if not exists discount_rules (
   created_at       timestamptz not null default now()
 );
 
+-- A rule may be pinned to one customer tier; null means it applies to every
+-- tier. Nullable rather than defaulted, so rules written before tiers existed
+-- keep applying to everyone.
+alter table discount_rules add column if not exists customer_tier text;
+do $$ begin
+  alter table discount_rules add constraint discount_rules_customer_tier_check
+    check (customer_tier is null
+           or customer_tier in ('standard','silver','gold','platinum'));
+exception when duplicate_object then null; end $$;
+
 create table if not exists warehouses (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -112,6 +122,14 @@ create table if not exists customers (
   portal_user_id text unique,
   created_at     timestamptz not null default now()
 );
+
+-- Commercial tier. With the product's category this decides the discount ceiling
+-- a rep may quote without escalation — see discount_rules.customer_tier below.
+alter table customers add column if not exists tier text not null default 'standard';
+do $$ begin
+  alter table customers add constraint customers_tier_check
+    check (tier in ('standard','silver','gold','platinum'));
+exception when duplicate_object then null; end $$;
 
 create index if not exists customers_portal_user_id_idx
   on customers (portal_user_id);
@@ -163,6 +181,13 @@ create table if not exists quotation_lines (
   unit_cost    numeric(12,2) not null,
   created_at   timestamptz not null default now()
 );
+
+-- Set only on subscription lines: which billing cycle the rep picked.
+alter table quotation_lines add column if not exists subscription_plan_id uuid;
+do $$ begin
+  alter table quotation_lines add constraint quotation_lines_subscription_plan_id_fkey
+    foreign key (subscription_plan_id) references subscription_plans(id);
+exception when duplicate_object then null; end $$;
 
 create index if not exists quotation_lines_quotation_id_idx
   on quotation_lines (quotation_id);
@@ -843,6 +868,25 @@ insert into discount_rules (name, scope, scope_ref, max_discount_pct, approval_l
   ('Support floor',             'category', 'Support',    20.00, 'finance')
 on conflict do nothing;
 
+-- Tier ceilings. scope_ref may name a real product category (Servers, Support)
+-- or one of the three kinds the builder groups by (Hardware, Service,
+-- Subscription); the ceiling lookup matches either, so a rule can be written at
+-- whichever level the desk thinks in.
+insert into discount_rules (name, scope, scope_ref, customer_tier, max_discount_pct, approval_level) values
+  ('Standard — hardware ceiling',     'category', 'Hardware',     'standard', 10.00, 'manager'),
+  ('Standard — service ceiling',      'category', 'Service',      'standard', 12.00, 'manager'),
+  ('Standard — subscription ceiling', 'category', 'Subscription', 'standard', 15.00, 'manager'),
+  ('Silver — hardware ceiling',       'category', 'Hardware',     'silver',   12.00, 'manager'),
+  ('Silver — service ceiling',        'category', 'Service',      'silver',   15.00, 'manager'),
+  ('Silver — subscription ceiling',   'category', 'Subscription', 'silver',   20.00, 'manager'),
+  ('Gold — hardware ceiling',         'category', 'Hardware',     'gold',     15.00, 'finance'),
+  ('Gold — service ceiling',          'category', 'Service',      'gold',     20.00, 'finance'),
+  ('Gold — subscription ceiling',     'category', 'Subscription', 'gold',     25.00, 'finance'),
+  ('Platinum — hardware ceiling',     'category', 'Hardware',     'platinum', 20.00, 'finance'),
+  ('Platinum — service ceiling',      'category', 'Service',      'platinum', 25.00, 'finance'),
+  ('Platinum — subscription ceiling', 'category', 'Subscription', 'platinum', 30.00, 'finance')
+on conflict do nothing;
+
 -- ============================================================ warehouses
 
 insert into warehouses (name, code, region, priority) values
@@ -879,9 +923,11 @@ on conflict do nothing;
 -- ============================================================ demo customer
 -- Set `portal_user_id` to a real Clerk user ID to exercise the portal (B8).
 
-insert into customers (name, email, portal_user_id) values
-  ('Northwind Logistics', 'ops@northwind.example', null),
-  ('Helios Manufacturing', 'it@helios.example',    null)
+insert into customers (name, email, tier, portal_user_id) values
+  ('Northwind Logistics',  'ops@northwind.example',  'gold',     null),
+  ('Helios Manufacturing', 'it@helios.example',      'silver',   null),
+  ('Vertex Retail Group',  'procure@vertex.example', 'platinum', null),
+  ('Bluepeak Systems',     'admin@bluepeak.example', 'standard', null)
 on conflict do nothing;
 
 -- ============================================================ upsell rules

@@ -1,8 +1,5 @@
-import {
-  monthlyValue,
-  nextBillingDate,
-  type BillingCadence,
-} from "@/lib/business-logic";
+import { asCadence, monthlyValue, nextBillingDate } from "@/lib/business-logic";
+import { formatDayMonth, isoDate, recentWeekStarts } from "@/lib/dates";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   EMPTY_FINANCE_STATS,
@@ -150,12 +147,6 @@ export async function loadFinanceDashboard(): Promise<FinanceDashboardData> {
  * MRR
  * ------------------------------------------------------------------ */
 
-function asCadence(value: string | null): BillingCadence {
-  return value === "monthly" || value === "quarterly" || value === "annual"
-    ? value
-    : "one_time";
-}
-
 /** One quotation's recurring value, normalised to a month. */
 function quotationMrr(row: QuotationRow): number {
   return (row.quotation_lines ?? []).reduce((sum, line) => {
@@ -181,7 +172,7 @@ function quotationMrr(row: QuotationRow): number {
  * per-week new business.
  */
 function buildMrrTrend(committed: QuotationRow[]): MrrPoint[] {
-  const weeks = weekStarts();
+  const weeks = recentWeekStarts(MRR_WEEKS);
 
   return weeks.map((weekStart) => {
     const weekEnd = new Date(weekStart);
@@ -195,25 +186,9 @@ function buildMrrTrend(committed: QuotationRow[]): MrrPoint[] {
 
     return {
       date: isoDate(weekStart),
-      label: weekStart.toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-      }),
+      label: formatDayMonth(weekStart),
       mrr: round(mrr),
     };
-  });
-}
-
-function weekStarts(): Date[] {
-  const monday = new Date();
-  monday.setHours(0, 0, 0, 0);
-  // getDay() is Sunday-based; shift so Monday is 0.
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-
-  return Array.from({ length: MRR_WEEKS }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(date.getDate() - (MRR_WEEKS - 1 - index) * 7);
-    return date;
   });
 }
 
@@ -394,8 +369,4 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function isoDate(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
+

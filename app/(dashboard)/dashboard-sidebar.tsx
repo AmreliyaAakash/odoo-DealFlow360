@@ -20,6 +20,7 @@ import {
 } from "@phosphor-icons/react";
 import { type Module } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/quotations";
+import { roleLabel } from "@/lib/roles";
 import { useRole } from "@/lib/use-role";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/globals";
@@ -145,18 +146,6 @@ const REPORTS: Item = {
   label: "Reports",
   icon: ChartBarIcon,
   module: "reports",
-};
-
-/** Human-readable role names for the profile row. */
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
-  manager: "Sales Manager",
-  finance: "Finance",
-  rep: "Sales Rep",
-  // A customer never reaches this sidebar — the route guard sends them to
-  // /portal — but the map stays exhaustive so a role can never render blank.
-  customer: "Customer",
-  none: "No role",
 };
 
 /**
@@ -364,7 +353,7 @@ export function DashboardSidebar({
         <div className="flex items-center gap-2 rounded-lg px-2.5 py-2 ring-1 ring-border">
           <UserButton />
           <span className="min-w-0 text-[11px] text-muted-foreground">
-            {ROLE_LABELS[role ?? "none"]}
+            {roleLabel(role)}
           </span>
         </div>
       </div>

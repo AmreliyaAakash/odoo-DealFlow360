@@ -11,6 +11,7 @@ import {
   type Module,
   type Scope,
 } from "@/lib/permissions";
+import { asRole } from "@/lib/roles";
 import type { Role } from "@/types/globals";
 
 /**
@@ -28,12 +29,6 @@ import type { Role } from "@/types/globals";
  * Hiding a control is a courtesy, not a defence. Every action a role may not
  * take is refused again by the API and by RLS.
  */
-
-const ROLES = new Set<string>(["admin", "manager", "finance", "rep", "customer"]);
-
-function asRole(value: unknown): Role | null {
-  return typeof value === "string" && ROLES.has(value) ? (value as Role) : null;
-}
 
 const RANK: Record<Capability, number> = {
   none: 0,

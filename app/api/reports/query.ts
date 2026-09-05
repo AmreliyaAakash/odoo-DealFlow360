@@ -1,7 +1,7 @@
 import "server-only";
-import { clerkClient } from "@clerk/nextjs/server";
 import type { Scope } from "@/lib/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { nameFor, resolveUserNames } from "@/lib/users-server";
 
 /**
  * A7 — the reporting query.
@@ -144,7 +144,7 @@ export async function runReport(
   if (error) return failure(scoped, actor.scope, error.message);
 
   const raw = data ?? [];
-  const names = await resolveRepNames(raw.map((row) => row.rep_id));
+  const names = await resolveUserNames(raw.map((row) => row.rep_id));
 
   const rows: ReportRow[] = raw.map((row) => {
     const netTotal = Number(row.net_total ?? 0);
@@ -154,7 +154,7 @@ export async function runReport(
       quotationId: row.id,
       reference: row.reference,
       customer: row.customers?.name ?? null,
-      rep: names.get(row.rep_id) ?? shortId(row.rep_id),
+      rep: nameFor(names, row.rep_id),
       repId: row.rep_id,
       status: row.status,
       subtotal: Number(row.subtotal ?? 0),
@@ -270,37 +270,4 @@ export function periodLabel(period: string | null): string {
     );
   }
   return period;
-}
-
-/* ------------------------------------------------------------------ *
- * Rep names
- * ------------------------------------------------------------------ */
-
-/** Reps are Clerk users, not rows. One batched call; ids on failure. */
-async function resolveRepNames(repIds: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(repIds)].filter(Boolean);
-  if (unique.length === 0) return new Map();
-
-  try {
-    const client = await clerkClient();
-    const { data } = await client.users.getUserList({
-      userId: unique,
-      limit: Math.min(unique.length, 500),
-    });
-
-    return new Map(
-      data.map((user) => [
-        user.id,
-        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-          user.emailAddresses[0]?.emailAddress ||
-          shortId(user.id),
-      ]),
-    );
-  } catch {
-    return new Map();
-  }
-}
-
-function shortId(id: string): string {
-  return id.length > 12 ? `${id.slice(0, 10)}…` : id;
 }

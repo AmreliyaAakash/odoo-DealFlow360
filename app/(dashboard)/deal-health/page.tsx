@@ -1,17 +1,23 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/ssr";
+import { currentUser } from "@/lib/auth";
 import type { DealHealthQuotation } from "@/lib/business-logic";
+import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { Notice, PageHeader, Panel, PanelHeader } from "@/components/dashboard/panel";
 import { DealHealthTable } from "./deal-health-table";
 
 /** B9 — open quotations, seeded server-side then kept fresh by realtime. */
 export default async function DealHealthPage() {
-  const { userId } = await auth();
+  const { userId, role } = await currentUser();
   if (!userId) {
     redirect("/sign-in");
   }
+
+  // The route guard lets every staff role in; the matrix is what an account's
+  // own override can narrow, so it is checked here too.
+  const { access } = await effectiveAccess(userId, role);
+  if (!canWith(access, "dealHealth", "view")) redirect("/unauthorized");
 
   const supabase = createServerSupabaseClient();
 

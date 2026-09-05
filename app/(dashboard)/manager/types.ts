@@ -30,31 +30,10 @@ export type AnomalyRep = {
   openDeals: number;
 };
 
-export type ViolatingLine = {
-  id: string;
-  productName: string;
-  qty: number;
-  discountPct: number;
-  unitPrice: number;
-  /** Which discount rule this line breaches. */
-  rule: string;
-};
-
-export type PendingApproval = {
-  id: string;
-  reference: string;
-  repId: string;
-  repName: string;
-  customer: string;
-  amount: number;
-  margin: number;
-  marginPct: number | null;
-  maxDiscountPct: number;
-  riskScore: number;
-  requiredApprovals: string[];
-  submittedAt: string | null;
-  violatingLines: ViolatingLine[];
-};
+// The approval queue's shapes are shared with /approvals, so they live in
+// lib/approvals-server.ts. Re-exported here so this file stays the one import
+// the manager screens need.
+export type { PendingApproval, ViolatingLine } from "@/lib/approvals-server";
 
 /**
  * How far above their own baseline a rep must drift to be flagged. Lives here,

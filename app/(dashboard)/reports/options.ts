@@ -1,8 +1,9 @@
 import "server-only";
-import { clerkClient } from "@clerk/nextjs/server";
 import type { Scope } from "@/lib/permissions";
+import { shortId } from "@/lib/roles";
 import { QUOTATION_STATUSES, statusLabel } from "@/lib/status";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { resolveUserNames } from "@/lib/users-server";
 
 /** Everything the filter dropdowns need, resolved server-side. */
 
@@ -78,30 +79,9 @@ async function repOptions(rows: { rep_id: string }[]): Promise<Option[]> {
   const ids = [...new Set(rows.map((row) => row.rep_id))].filter(Boolean);
   if (ids.length === 0) return [];
 
-  try {
-    const client = await clerkClient();
-    const { data } = await client.users.getUserList({
-      userId: ids,
-      limit: Math.min(ids.length, 500),
-    });
+  const named = await resolveUserNames(ids);
 
-    const named = new Map(
-      data.map((user) => [
-        user.id,
-        [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-          user.emailAddresses[0]?.emailAddress ||
-          user.id,
-      ]),
-    );
-
-    return ids
-      .map((id) => ({ value: id, label: named.get(id) ?? shortId(id) }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  } catch {
-    return ids.map((id) => ({ value: id, label: shortId(id) }));
-  }
-}
-
-function shortId(id: string): string {
-  return id.length > 12 ? `${id.slice(0, 10)}…` : id;
+  return ids
+    .map((id) => ({ value: id, label: named.get(id) ?? shortId(id) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }

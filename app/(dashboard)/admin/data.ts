@@ -1,4 +1,5 @@
 import { clerkClient } from "@clerk/nextjs/server";
+import { formatDayMonth, isoDate, recentWeekStarts, startOfWeek } from "@/lib/dates";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   ACTIVE_WITHIN_DAYS,
@@ -56,7 +57,7 @@ export async function loadAdminDashboard(): Promise<AdminDashboardData> {
     supabase
       .from("quotations")
       .select("net_total, created_at")
-      .gte("created_at", weekStarts()[0].toISOString())
+      .gte("created_at", recentWeekStarts(VOLUME_WEEKS)[0].toISOString())
       .returns<QuotationRow[]>(),
     supabase
       .from("config_audit_log")
@@ -111,13 +112,10 @@ export async function loadAdminDashboard(): Promise<AdminDashboardData> {
 function buildVolume(rows: QuotationRow[]): DealVolumePoint[] {
   const buckets = new Map<string, DealVolumePoint>();
 
-  for (const weekStart of weekStarts()) {
+  for (const weekStart of recentWeekStarts(VOLUME_WEEKS)) {
     buckets.set(isoDate(weekStart), {
       date: isoDate(weekStart),
-      label: weekStart.toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-      }),
+      label: formatDayMonth(weekStart),
       value: 0,
       count: 0,
     });
@@ -146,25 +144,6 @@ function buildVolume(rows: QuotationRow[]): DealVolumePoint[] {
 
 function emptyVolume(): DealVolumePoint[] {
   return buildVolume([]);
-}
-
-/** Monday of the week `date` falls in. */
-function startOfWeek(date: Date): Date {
-  const monday = new Date(date);
-  monday.setHours(0, 0, 0, 0);
-  // getDay() is Sunday-based; shift so Monday is 0.
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-  return monday;
-}
-
-function weekStarts(): Date[] {
-  const thisMonday = startOfWeek(new Date());
-
-  return Array.from({ length: VOLUME_WEEKS }, (_, index) => {
-    const date = new Date(thisMonday);
-    date.setDate(date.getDate() - (VOLUME_WEEKS - 1 - index) * 7);
-    return date;
-  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -251,10 +230,4 @@ export async function loadManagedUsers(): Promise<{
   }
 }
 
-/* ------------------------------------------------------------------ */
 
-function isoDate(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}

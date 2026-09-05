@@ -4,6 +4,7 @@ import { TrashIcon } from "@phosphor-icons/react";
 import {
   formatCurrency,
   lineTotals,
+  unitPriceFor,
   type Product,
   type QuotationLineInput,
 } from "@/lib/quotations";
@@ -11,8 +12,13 @@ import { Td, Tr } from "@/components/dashboard/panel";
 import { DiscountBadge } from "@/components/dashboard/status-badge";
 
 /**
- * One editable line in the quotation builder (B3): qty, discount %, and the
- * resulting net and margin.
+ * One line of a quotation (B3): qty, discount %, and the resulting net and
+ * margin. Editable in the builder, read-only wherever a signed quote is shown.
+ *
+ * The callbacks are optional because a Server Component cannot pass a function
+ * across the boundary at all — not even a no-op. A read-only caller omits them,
+ * and nothing here calls them in that mode: the quantity and discount inputs are
+ * `readOnly`, and the remove button is not rendered.
  */
 export function QuoteLineRow({
   product,
@@ -25,8 +31,8 @@ export function QuoteLineRow({
   product: Product;
   line: QuotationLineInput;
   index?: number;
-  onChange: (patch: Partial<QuotationLineInput>) => void;
-  onRemove: () => void;
+  onChange?: (patch: Partial<QuotationLineInput>) => void;
+  onRemove?: () => void;
   readOnly?: boolean;
 }) {
   const totals = lineTotals(product, line);
@@ -44,7 +50,9 @@ export function QuoteLineRow({
           {product.sku ? ` · ${product.sku}` : ""}
         </span>
       </Td>
-      <Td className="text-right tabular-nums">{formatCurrency(product.list_price)}</Td>
+      <Td className="text-right tabular-nums">
+        {formatCurrency(unitPriceFor(product, line))}
+      </Td>
       <Td>
         <NumberField
           value={line.qty}
@@ -52,7 +60,7 @@ export function QuoteLineRow({
           max={Infinity}
           readOnly={readOnly}
           label={`Quantity for ${product.name}`}
-          onChange={(qty) => onChange({ qty })}
+          onChange={(qty) => onChange?.({ qty })}
         />
       </Td>
       <Td>
@@ -62,7 +70,7 @@ export function QuoteLineRow({
           max={100}
           readOnly={readOnly}
           label={`Discount for ${product.name}`}
-          onChange={(discountPct) => onChange({ discountPct })}
+          onChange={(discountPct) => onChange?.({ discountPct })}
         />
       </Td>
       <Td className="text-right">

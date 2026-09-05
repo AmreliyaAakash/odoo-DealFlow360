@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { canActAtLevel, type Capability, type Module, type Scope } from "@/lib/permissions";
+import { asRole } from "@/lib/roles";
 import { canWith, effectiveAccess, scopeWith } from "@/lib/permissions-server";
 import type { Role } from "@/types/globals";
 
@@ -23,12 +24,6 @@ import type { Role } from "@/types/globals";
 
 export const APPROVER_ROLES = ["manager", "finance", "admin"] as const;
 export type ApproverRole = (typeof APPROVER_ROLES)[number];
-
-const ROLES = new Set<string>(["admin", "manager", "finance", "rep", "customer"]);
-
-function asRole(value: unknown): Role | null {
-  return typeof value === "string" && ROLES.has(value) ? (value as Role) : null;
-}
 
 /** Reads the role from the user record. Use only when the claim is absent. */
 export async function fetchRole(userId: string): Promise<Role | null> {

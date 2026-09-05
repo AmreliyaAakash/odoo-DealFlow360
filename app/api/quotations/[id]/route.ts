@@ -13,6 +13,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 const QUOTATION_SELECT = `
   id, reference, status, notes, valid_until,
   subtotal, discount_total, net_total, cost_total, margin_total,
+  max_discount_pct, risk_score,
   required_approvals, submitted_by, submitted_at,
   customers(id, name),
   quotation_lines(

@@ -8,8 +8,107 @@
  * Rules marked STUB are placeholders awaiting the agreed business definitions.
  */
 
-import type { QuotationSummary } from "@/lib/quotations";
+import {
+  PRODUCT_KIND_LABELS,
+  productKind,
+  type ProductFacts,
+  type QuotationSummary,
+} from "@/lib/quotations";
 import type { Role } from "@/types/globals";
+
+/* ------------------------------------------------------------------ *
+ * Customer tiers and discount ceilings
+ * ------------------------------------------------------------------ */
+
+export const CUSTOMER_TIERS = ["standard", "silver", "gold", "platinum"] as const;
+export type CustomerTier = (typeof CUSTOMER_TIERS)[number];
+
+export const TIER_LABELS: Record<CustomerTier, string> = {
+  standard: "Standard",
+  silver: "Silver",
+  gold: "Gold",
+  platinum: "Platinum",
+};
+
+export function asCustomerTier(value: unknown): CustomerTier {
+  return (CUSTOMER_TIERS as readonly string[]).includes(value as string)
+    ? (value as CustomerTier)
+    : "standard";
+}
+
+/** A row of `discount_rules`, as the ceiling lookup needs it. */
+export type DiscountRule = {
+  scope: string;
+  scope_ref: string | null;
+  customer_tier: string | null;
+  max_discount_pct: number;
+};
+
+/**
+ * The deepest discount a rep may quote on this product for this customer.
+ *
+ * Rules are matched on tier first — a rule pinned to a tier applies only to that
+ * tier, an unpinned one applies to everybody — and then on specificity:
+ * product-scoped rules win over category-scoped, which win over global. Only the
+ * most specific band that matched is considered, and within it the highest
+ * ceiling is taken, because several rules at the same level are escalation steps
+ * (10 / 25 / 40) rather than competing limits.
+ *
+ * A category rule may name either the product's own category ("Support") or the
+ * kind the builder groups by ("Subscription"), so the desk can write the rule at
+ * whichever level it thinks in.
+ *
+ * Returns `null` when no rule reaches this product — an unconstrained line,
+ * which the UI says plainly rather than inventing a number.
+ */
+export function discountCeiling(
+  product: ProductFacts,
+  tier: CustomerTier,
+  rules: DiscountRule[],
+): number | null {
+  const applicable = rules.filter(
+    (rule) => rule.customer_tier === null || rule.customer_tier === tier,
+  );
+
+  const kindLabel = PRODUCT_KIND_LABELS[productKind(product)].toLowerCase();
+  const category = product.category.toLowerCase();
+
+  const bands = [
+    applicable.filter(
+      (rule) =>
+        rule.scope === "product" &&
+        (rule.scope_ref === product.id || rule.scope_ref === product.sku),
+    ),
+    applicable.filter((rule) => {
+      if (rule.scope !== "category") return false;
+      const ref = rule.scope_ref?.toLowerCase();
+      return ref === category || ref === kindLabel;
+    }),
+    applicable.filter((rule) => rule.scope === "global"),
+  ];
+
+  for (const band of bands) {
+    if (band.length > 0) {
+      return Math.max(...band.map((rule) => rule.max_discount_pct));
+    }
+  }
+
+  return null;
+}
+
+/** "Gold hardware ceiling: 15%" — the helper text shown beside a discount field. */
+export function ceilingHelperText(
+  product: ProductFacts,
+  tier: CustomerTier,
+  rules: DiscountRule[],
+): string {
+  const ceiling = discountCeiling(product, tier, rules);
+  const kind = PRODUCT_KIND_LABELS[productKind(product)].toLowerCase();
+
+  return ceiling === null
+    ? `${TIER_LABELS[tier]} ${kind}: no ceiling set`
+    : `${TIER_LABELS[tier]} ${kind} ceiling: ${ceiling}%`;
+}
 
 /* ------------------------------------------------------------------ *
  * Approval routing
@@ -213,6 +312,16 @@ export type ProrationResult = {
   /** Fraction of the period remaining at the time of the change. */
   remainingFraction: number;
 };
+
+/**
+ * Narrows a `products.cadence` column to a BillingCadence. Anything unknown is
+ * treated as one-off, so a bad value can never inflate recurring revenue.
+ */
+export function asCadence(value: string | null | undefined): BillingCadence {
+  return value === "monthly" || value === "quarterly" || value === "annual"
+    ? value
+    : "one_time";
+}
 
 export function isRecurring(line: BillingLine): boolean {
   return line.cadence !== "one_time";

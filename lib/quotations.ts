@@ -7,12 +7,64 @@ export type Product = {
   category: string;
   list_price: number;
   cost: number;
+  /** Billing rhythm. Anything but `one_time` makes the product a subscription. */
+  cadence?: BillingCadence;
 };
+
+/** Columns every product query needs for the shapes in this module to be whole. */
+export const PRODUCT_COLUMNS = "id, name, sku, category, list_price, cost, cadence";
+
+export type BillingCadence = "one_time" | "monthly" | "quarterly" | "annual";
+
+/**
+ * The three buckets the quotation builder groups the catalog into.
+ *
+ * Derived rather than stored: `products.category` is free text the admin owns
+ * (Servers, Networking, Support…), and pinning the builder to a fixed list would
+ * mean a new category silently disappearing from it. Cadence decides
+ * subscription because that is what actually makes a line recur.
+ */
+export const PRODUCT_KINDS = ["hardware", "service", "subscription"] as const;
+export type ProductKind = (typeof PRODUCT_KINDS)[number];
+
+export const PRODUCT_KIND_LABELS: Record<ProductKind, string> = {
+  hardware: "Hardware",
+  service: "Service",
+  subscription: "Subscription",
+};
+
+/** Categories that are work rather than goods. Matched case-insensitively. */
+const SERVICE_CATEGORIES = new Set(["services", "service", "professional services"]);
+
+/** The little of a product that decides its kind and its discount ceiling. */
+export type ProductFacts = Pick<Product, "category" | "cadence"> &
+  Partial<Pick<Product, "id" | "sku">>;
+
+export function productKind(product: ProductFacts): ProductKind {
+  if (product.cadence && product.cadence !== "one_time") return "subscription";
+  if (SERVICE_CATEGORIES.has(product.category.toLowerCase())) return "service";
+  return "hardware";
+}
+
+export function isSubscription(product: ProductFacts): boolean {
+  return productKind(product) === "subscription";
+}
 
 export type QuotationLineInput = {
   productId: string;
   qty: number;
   discountPct: number;
+  /** Chosen billing cycle. Set only on subscription lines. */
+  subscriptionPlanId?: string | null;
+  /**
+   * Negotiated unit price, overriding the catalog list price.
+   *
+   * Reps are allowed to move price as well as discount, so this is a real input
+   * rather than a display value — but `cost` is never taken from the client, so
+   * an override still shows up honestly as margin erosion and still trips the
+   * approval rules. Omit or null to quote at list.
+   */
+  unitPrice?: number | null;
 };
 
 export type LineTotals = {
@@ -31,8 +83,16 @@ export type QuotationSummary = LineTotals & {
   lineCount: number;
 };
 
+/** The price this line actually quotes: the rep's override, else list price. */
+export function unitPriceFor(product: Product, line: QuotationLineInput): number {
+  const override = line.unitPrice;
+  return typeof override === "number" && Number.isFinite(override) && override >= 0
+    ? override
+    : product.list_price;
+}
+
 export function lineTotals(product: Product, line: QuotationLineInput): LineTotals {
-  const gross = product.list_price * line.qty;
+  const gross = unitPriceFor(product, line) * line.qty;
   const discount = gross * (line.discountPct / 100);
   const net = gross - discount;
   const cost = product.cost * line.qty;

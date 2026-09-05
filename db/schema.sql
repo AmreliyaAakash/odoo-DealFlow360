@@ -64,6 +64,16 @@ create table if not exists discount_rules (
   created_at       timestamptz not null default now()
 );
 
+-- A rule may be pinned to one customer tier; null means it applies to every
+-- tier. Nullable rather than defaulted, so rules written before tiers existed
+-- keep applying to everyone.
+alter table discount_rules add column if not exists customer_tier text;
+do $$ begin
+  alter table discount_rules add constraint discount_rules_customer_tier_check
+    check (customer_tier is null
+           or customer_tier in ('standard','silver','gold','platinum'));
+exception when duplicate_object then null; end $$;
+
 create table if not exists warehouses (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -103,6 +113,14 @@ create table if not exists customers (
   portal_user_id text unique,
   created_at     timestamptz not null default now()
 );
+
+-- Commercial tier. With the product's category this decides the discount ceiling
+-- a rep may quote without escalation — see discount_rules.customer_tier below.
+alter table customers add column if not exists tier text not null default 'standard';
+do $$ begin
+  alter table customers add constraint customers_tier_check
+    check (tier in ('standard','silver','gold','platinum'));
+exception when duplicate_object then null; end $$;
 
 create index if not exists customers_portal_user_id_idx
   on customers (portal_user_id);
@@ -154,6 +172,13 @@ create table if not exists quotation_lines (
   unit_cost    numeric(12,2) not null,
   created_at   timestamptz not null default now()
 );
+
+-- Set only on subscription lines: which billing cycle the rep picked.
+alter table quotation_lines add column if not exists subscription_plan_id uuid;
+do $$ begin
+  alter table quotation_lines add constraint quotation_lines_subscription_plan_id_fkey
+    foreign key (subscription_plan_id) references subscription_plans(id);
+exception when duplicate_object then null; end $$;
 
 create index if not exists quotation_lines_quotation_id_idx
   on quotation_lines (quotation_id);

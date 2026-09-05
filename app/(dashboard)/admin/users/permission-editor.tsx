@@ -10,6 +10,7 @@ import {
   type Capability,
   type Module,
 } from "@/lib/permissions";
+import { putBody, useApiMutation } from "@/lib/use-api-mutation";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -60,7 +61,18 @@ export function PermissionEditor({
   const [draft, setDraft] = useState<Record<Module, Access> | null>(null);
   const [customized, setCustomized] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+
+  const saveAccess = useApiMutation(`/api/admin/users/${user.id}/permissions`, {
+    successMessage: `Access updated for ${user.name}`,
+    errorMessage: "Could not save",
+    refresh: true,
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+  });
+
+  const saving = saveAccess.pending;
 
   useEffect(() => {
     let cancelled = false;
@@ -109,42 +121,25 @@ export function PermissionEditor({
     );
   }
 
-  async function save() {
+  function save() {
     if (!draft || !data) return;
 
-    setSaving(true);
-    setError(null);
-    try {
-      // Only genuine differences from the role are stored. A customized account
-      // stores everything, because it no longer has a role to differ from.
-      const overrides = MODULES.filter((module) => {
-        if (customized) return true;
-        const base = data.baseline[module];
-        return (
-          base.capability !== draft[module].capability ||
-          base.scope !== draft[module].scope
-        );
-      }).map((module) => ({
-        module,
-        capability: draft[module].capability,
-        scope: draft[module].scope,
-      }));
+    // Only genuine differences from the role are stored. A customized account
+    // stores everything, because it no longer has a role to differ from.
+    const overrides = MODULES.filter((module) => {
+      if (customized) return true;
+      const base = data.baseline[module];
+      return (
+        base.capability !== draft[module].capability ||
+        base.scope !== draft[module].scope
+      );
+    }).map((module) => ({
+      module,
+      capability: draft[module].capability,
+      scope: draft[module].scope,
+    }));
 
-      const response = await fetch(`/api/admin/users/${user.id}/permissions`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides, customized }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body?.error ?? "Could not save");
-
-      onSaved();
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save");
-    } finally {
-      setSaving(false);
-    }
+    void saveAccess.run(putBody({ overrides, customized }));
   }
 
   function resetToRole() {
@@ -173,9 +168,9 @@ export function PermissionEditor({
           </DialogDescription>
         </DialogHeader>
 
-        {error ? (
+        {error ?? saveAccess.error ? (
           <p className="rounded-lg bg-red-500/10 p-2 text-[11px] text-red-600 dark:text-red-400">
-            {error}
+            {error ?? saveAccess.error}
           </p>
         ) : null}
 

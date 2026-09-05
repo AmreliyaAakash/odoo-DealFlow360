@@ -3,7 +3,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { ArrowRightIcon, ClockCounterClockwiseIcon } from "@phosphor-icons/react";
 import { formatDistanceToNow } from "date-fns";
-import { useSupabase } from "@/lib/supabase";
+import { useSupabase } from "@/components/providers/supabase-provider";
+import { shortId } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { DataTable, EmptyRow, Panel, PanelHeader, Td, Th, Tr } from "@/components/dashboard/panel";
 import { ACTION_STYLES, ENTITY_LABELS, type AuditLogRow } from "./types";
@@ -100,10 +101,10 @@ export function AuditLog({ initial }: { initial: AuditLogRow[] }) {
             >
               <Td className="font-medium">
                 <span className="block truncate">
-                  {row.actor_name ?? shortId(row.actor_id)}
+                  {row.actor_name ?? shortId(row.actor_id, 14)}
                 </span>
                 <span className="block truncate text-[10px] font-normal text-muted-foreground">
-                  {shortId(row.actor_id)}
+                  {shortId(row.actor_id, 14)}
                 </span>
               </Td>
 
@@ -194,6 +195,4 @@ function RelativeTime({ iso }: { iso: string }) {
   );
 }
 
-function shortId(id: string): string {
-  return id.length > 14 ? `${id.slice(0, 12)}…` : id;
-}
+

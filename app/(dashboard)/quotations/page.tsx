@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ReceiptIcon } from "@phosphor-icons/react/dist/ssr";
+import { PlusIcon, ReceiptIcon } from "@phosphor-icons/react/dist/ssr";
 import { currentUser } from "@/lib/auth";
 import { canWith, effectiveAccess, scopeWith } from "@/lib/permissions-server";
 import { formatCurrency } from "@/lib/quotations";
@@ -19,7 +19,6 @@ import {
   Tr,
 } from "@/components/dashboard/panel";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { NewQuotationButton, type CustomerOption } from "./new-quotation-button";
 
 /** B2 — quotation list / pipeline. */
 
@@ -56,16 +55,7 @@ export default async function QuotationsPage() {
   // applies, kept here so the page and the endpoint cannot disagree.
   if (scope === "own") pipelineQuery = pipelineQuery.eq("rep_id", userId);
 
-  const [pipelineResult, customersResult] = await Promise.all([
-    pipelineQuery.returns<PipelineRow[]>(),
-    canCreate
-      ? supabase
-          .from("customers")
-          .select("id, name")
-          .order("name", { ascending: true })
-          .returns<CustomerOption[]>()
-      : Promise.resolve({ data: [] as CustomerOption[], error: null }),
-  ]);
+  const pipelineResult = await pipelineQuery.returns<PipelineRow[]>();
 
   const quotations = pipelineResult.data ?? [];
   const error = pipelineResult.error?.message ?? null;
@@ -79,7 +69,13 @@ export default async function QuotationsPage() {
         badge="Pipeline"
       >
         {canCreate ? (
-          <NewQuotationButton customers={customersResult.data ?? []} />
+          <Link
+            href="/quotations/new"
+            className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-50 transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
+            <PlusIcon size={13} weight="bold" />
+            New quotation
+          </Link>
         ) : null}
       </PageHeader>
 

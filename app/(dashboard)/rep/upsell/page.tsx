@@ -1,5 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { currentUser } from "@/lib/auth";
+import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import type { Product } from "@/lib/quotations";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { Notice, PageHeader } from "@/components/dashboard/panel";
@@ -9,10 +10,16 @@ import { UpsellSuggestionsBrowser } from "./upsell-browser";
 export default async function UpsellSuggestionsPage() {
   // Per-user page: reading auth up front also marks the route dynamic, so Next
   // does not try to prerender it and trip Supabase's realtime token setup.
-  const { userId } = await auth();
+  const { userId, role } = await currentUser();
   if (!userId) {
     redirect("/sign-in");
   }
+
+  // `proxy.ts` opens /rep/* to every approver, but the panel is the rep's tool:
+  // the matrix gives manager and finance nothing here. Without this check the
+  // sidebar would hide the link while the URL still worked.
+  const { access } = await effectiveAccess(userId, role);
+  if (!canWith(access, "upsellPanel", "use")) redirect("/unauthorized");
 
   const supabase = createServerSupabaseClient();
 

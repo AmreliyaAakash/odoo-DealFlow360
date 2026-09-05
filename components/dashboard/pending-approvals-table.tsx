@@ -8,8 +8,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { riskBand } from "@/lib/business-logic";
 import { formatCurrency, formatPercent } from "@/lib/quotations";
 import { cn } from "@/lib/utils";
+import type { PendingApproval } from "@/lib/approvals-server";
 import { Notice, Panel, PanelHeader } from "@/components/dashboard/panel";
-import type { PendingApproval } from "./types";
 
 type Action = "approve" | "reject" | "return";
 
@@ -19,7 +19,25 @@ const RISK_STYLES = {
   high: { bar: "bg-red-500", text: "text-red-600 dark:text-red-400" },
 } as const;
 
-export function PendingApprovalsTable({ deals }: { deals: PendingApproval[] }) {
+export function PendingApprovalsTable({
+  deals,
+  title = "Pending Approvals",
+  delay = 320,
+  canDecide = true,
+  emptyText = "Nothing is waiting on you.",
+}: {
+  deals: PendingApproval[];
+  title?: string;
+  delay?: number;
+  /**
+   * Whether this viewer may record a decision. A rep watches their own deals
+   * move through the queue but never decides on one, so the controls are absent
+   * rather than present-and-disabled: a disabled Approve reads as "not yet",
+   * which is the wrong story.
+   */
+  canDecide?: boolean;
+  emptyText?: string;
+}) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -67,10 +85,10 @@ export function PendingApprovalsTable({ deals }: { deals: PendingApproval[] }) {
   }
 
   return (
-    <Panel delay={320}>
+    <Panel delay={delay}>
       <PanelHeader
         icon={StackIcon}
-        title="Pending Approvals"
+        title={title}
         caption={`${deals.length} awaiting a decision, highest risk first`}
       />
 
@@ -90,7 +108,9 @@ export function PendingApprovalsTable({ deals }: { deals: PendingApproval[] }) {
               <th className="w-36 px-2 py-2 font-medium">Blended Risk</th>
               <th className="w-28 px-2 py-2 text-right font-medium">Amount</th>
               <th className="w-24 px-2 py-2 text-right font-medium">Lines</th>
-              <th className="w-56 px-2 py-2 font-medium">Decision</th>
+              {canDecide ? (
+                <th className="w-56 px-2 py-2 font-medium">Decision</th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -101,6 +121,7 @@ export function PendingApprovalsTable({ deals }: { deals: PendingApproval[] }) {
                 index={index}
                 expanded={expanded === deal.id}
                 busy={busyId === deal.id}
+                canDecide={canDecide}
                 onToggle={() =>
                   setExpanded((current) => (current === deal.id ? null : deal.id))
                 }
@@ -110,8 +131,11 @@ export function PendingApprovalsTable({ deals }: { deals: PendingApproval[] }) {
 
             {deals.length === 0 ? (
               <tr className="border-t border-border/60">
-                <td colSpan={7} className="px-2 py-10 text-center text-muted-foreground">
-                  Nothing is waiting on you.
+                <td
+                  colSpan={canDecide ? 7 : 6}
+                  className="px-2 py-10 text-center text-muted-foreground"
+                >
+                  {emptyText}
                 </td>
               </tr>
             ) : null}
@@ -127,6 +151,7 @@ function DealRows({
   index,
   expanded,
   busy,
+  canDecide,
   onToggle,
   onDecide,
 }: {
@@ -134,6 +159,7 @@ function DealRows({
   index: number;
   expanded: boolean;
   busy: boolean;
+  canDecide: boolean;
   onToggle: () => void;
   onDecide: (action: Action) => void;
 }) {
@@ -221,7 +247,7 @@ function DealRows({
           )}
         </td>
 
-        <td className="px-2 py-2.5">
+        <td className={cn("px-2 py-2.5", !canDecide && "hidden")}>
           <div className="flex gap-1">
             <DecisionButton
               label="Approve"
@@ -248,7 +274,7 @@ function DealRows({
       <AnimatePresence initial={false}>
         {expanded ? (
           <tr>
-            <td colSpan={7} className="p-0">
+            <td colSpan={canDecide ? 7 : 6} className="p-0">
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}

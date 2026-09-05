@@ -1,3 +1,4 @@
+import { isoDate } from "@/lib/dates";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import {
   EMPTY_STATS,
@@ -169,12 +170,6 @@ function buildSeries(rows: Row[]): PipelinePoint[] {
   }
 
   return points;
-}
-
-function isoDate(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function buildStatusMix(rows: Row[]): StatusSlice[] {

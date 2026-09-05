@@ -1,9 +1,9 @@
 import {
+  asCadence,
   isQuoteClosedLost,
   isQuoteVisibleToCustomer,
   nextBillingDate,
   portalStage,
-  type BillingCadence,
 } from "@/lib/business-logic";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { ownsCustomer, type PortalIdentity } from "../guard";
@@ -147,12 +147,6 @@ export async function loadPortalQuote(
       lines,
     },
   };
-}
-
-function asCadence(value: string | null): BillingCadence {
-  return value === "monthly" || value === "quarterly" || value === "annual"
-    ? value
-    : "one_time";
 }
 
 /** Earliest upcoming bill date across the recurring lines, or null if none. */

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { currentRole } from "@/lib/auth";
-import { canWrite } from "@/lib/permissions";
+import { currentUser } from "@/lib/auth";
+import { canWith, effectiveAccess } from "@/lib/permissions-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { ResourceTable, type ResourceRow } from "@/components/backend/resource-table";
 import type { EntityField } from "@/lib/backend-entities";
@@ -30,8 +30,14 @@ type Row = {
 };
 
 export default async function Page() {
-  const role = await currentRole();
-  if (!canWrite("upsellRules", role)) redirect("/unauthorized");
+  const { userId, role } = await currentUser();
+  if (!userId) redirect("/sign-in");
+
+  // Resolved, not static: the sibling config screens go through
+  // `requireCapability`, so an account granted this module by an override must
+  // reach it here too. `view` opens the screen — editing is not wired up yet.
+  const { access } = await effectiveAccess(userId, role);
+  if (!canWith(access, "upsellRules", "view")) redirect("/unauthorized");
 
   const supabase = createServerSupabaseClient();
 

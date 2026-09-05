@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requiredApprovals, type RequiredApproval } from "@/lib/business-logic";
 import {
+  requiredApprovals,
+  riskScore,
+  type RequiredApproval,
+} from "@/lib/business-logic";
+import {
+  PRODUCT_COLUMNS,
   summarize,
+  unitPriceFor,
   type Product,
   type QuotationLineInput,
   type QuotationSummary,
@@ -26,7 +32,7 @@ export async function priceLines(
 ): Promise<PricingSuccess | PricingFailure> {
   const { data, error } = await supabase
     .from("products")
-    .select("id, name, sku, category, list_price, cost")
+    .select(PRODUCT_COLUMNS)
     .in(
       "id",
       lines.map((line) => line.productId),
@@ -81,8 +87,11 @@ export async function replaceQuotationLines(
         product_id: line.productId,
         qty: line.qty,
         discount_pct: line.discountPct,
-        unit_price: product.list_price,
+        // Price is the rep's, cost is the catalog's — a negotiated price must
+        // never be able to talk the margin up with it.
+        unit_price: unitPriceFor(product, line),
         unit_cost: product.cost,
+        subscription_plan_id: line.subscriptionPlanId ?? null,
       };
     }),
   );
@@ -98,6 +107,8 @@ export function summaryColumns(summary: QuotationSummary, approvals: RequiredApp
     net_total: summary.net,
     cost_total: summary.cost,
     margin_total: summary.margin,
+    max_discount_pct: summary.maxDiscountPct,
+    risk_score: riskScore(summary),
     required_approvals: [...new Set(approvals.map((approval) => approval.level))],
   };
 }
@@ -111,7 +122,8 @@ export function parseLines(value: unknown): QuotationLineInput[] | null {
   for (const raw of value) {
     if (typeof raw !== "object" || raw === null) return null;
 
-    const { productId, qty, discountPct } = raw as Record<string, unknown>;
+    const { productId, qty, discountPct, unitPrice, subscriptionPlanId } =
+      raw as Record<string, unknown>;
 
     if (typeof productId !== "string" || productId.length === 0) return null;
     if (typeof qty !== "number" || !Number.isFinite(qty) || qty <= 0) return null;
@@ -123,12 +135,64 @@ export function parseLines(value: unknown): QuotationLineInput[] | null {
     ) {
       return null;
     }
+    if (
+      unitPrice !== undefined &&
+      unitPrice !== null &&
+      (typeof unitPrice !== "number" || !Number.isFinite(unitPrice) || unitPrice < 0)
+    ) {
+      return null;
+    }
+    if (
+      subscriptionPlanId !== undefined &&
+      subscriptionPlanId !== null &&
+      typeof subscriptionPlanId !== "string"
+    ) {
+      return null;
+    }
 
-    lines.push({ productId, qty, discountPct });
+    // `category` is accepted in the payload and deliberately dropped: the client
+    // sends it so its own validation reads clearly, but the server re-derives it
+    // from the product rather than believing it.
+    lines.push({
+      productId,
+      qty,
+      discountPct,
+      unitPrice: (unitPrice as number | null | undefined) ?? null,
+      subscriptionPlanId: (subscriptionPlanId as string | null | undefined) ?? null,
+    });
   }
 
   return lines;
 }
 
 export const LINES_SHAPE_ERROR =
-  "lines must be an array of { productId, qty, discountPct }";
+  "lines must be an array of { productId, qty, discountPct, unitPrice?, subscriptionPlanId? }";
+
+/**
+ * The approval verdict the builder shows the rep after saving.
+ *
+ * Computed from the re-priced summary, never from what the client sent, so the
+ * banner and the row in `quotations.required_approvals` cannot disagree.
+ */
+export type ApprovalVerdict = {
+  blendedRiskScore: number;
+  needsManager: boolean;
+  needsFinance: boolean;
+  needsAdmin: boolean;
+  requiredApprovals: RequiredApproval[];
+};
+
+export function approvalVerdict(
+  summary: QuotationSummary,
+  approvals: RequiredApproval[],
+): ApprovalVerdict {
+  const levels = new Set(approvals.map((approval) => approval.level));
+
+  return {
+    blendedRiskScore: riskScore(summary),
+    needsManager: levels.has("manager"),
+    needsFinance: levels.has("finance"),
+    needsAdmin: levels.has("admin"),
+    requiredApprovals: approvals,
+  };
+}

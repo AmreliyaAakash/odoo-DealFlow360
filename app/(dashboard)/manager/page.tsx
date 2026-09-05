@@ -5,7 +5,7 @@ import { AnomalyHighlights } from "./anomaly-highlights";
 import { ApprovalVolumeChart } from "./approval-volume-chart";
 import { loadManagerDashboard } from "./data";
 import { ManagerStatCards } from "./stat-cards";
-import { PendingApprovalsTable } from "./pending-approvals-table";
+import { PendingApprovalsTable } from "@/components/dashboard/pending-approvals-table";
 
 /** Sales manager / approver home. `proxy.ts` gates this to approver roles. */
 export default async function ManagerDashboardPage() {

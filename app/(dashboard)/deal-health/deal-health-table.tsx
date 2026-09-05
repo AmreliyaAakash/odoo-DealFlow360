@@ -8,7 +8,7 @@ import {
   type DealHealthQuotation,
 } from "@/lib/business-logic";
 import { formatCurrency } from "@/lib/quotations";
-import { useSupabase } from "@/lib/supabase";
+import { useSupabase } from "@/components/providers/supabase-provider";
 import { DataTable, EmptyRow, Td, Th, Tr } from "@/components/dashboard/panel";
 import { DiscountBadge, StatusBadge } from "@/components/dashboard/status-badge";
 

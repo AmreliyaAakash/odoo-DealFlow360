@@ -28,6 +28,25 @@ insert into discount_rules (name, scope, scope_ref, max_discount_pct, approval_l
   ('Support floor',             'category', 'Support',    20.00, 'finance')
 on conflict do nothing;
 
+-- Tier ceilings. scope_ref may name a real product category (Servers, Support)
+-- or one of the three kinds the builder groups by (Hardware, Service,
+-- Subscription); the ceiling lookup matches either, so a rule can be written at
+-- whichever level the desk thinks in.
+insert into discount_rules (name, scope, scope_ref, customer_tier, max_discount_pct, approval_level) values
+  ('Standard — hardware ceiling',     'category', 'Hardware',     'standard', 10.00, 'manager'),
+  ('Standard — service ceiling',      'category', 'Service',      'standard', 12.00, 'manager'),
+  ('Standard — subscription ceiling', 'category', 'Subscription', 'standard', 15.00, 'manager'),
+  ('Silver — hardware ceiling',       'category', 'Hardware',     'silver',   12.00, 'manager'),
+  ('Silver — service ceiling',        'category', 'Service',      'silver',   15.00, 'manager'),
+  ('Silver — subscription ceiling',   'category', 'Subscription', 'silver',   20.00, 'manager'),
+  ('Gold — hardware ceiling',         'category', 'Hardware',     'gold',     15.00, 'finance'),
+  ('Gold — service ceiling',          'category', 'Service',      'gold',     20.00, 'finance'),
+  ('Gold — subscription ceiling',     'category', 'Subscription', 'gold',     25.00, 'finance'),
+  ('Platinum — hardware ceiling',     'category', 'Hardware',     'platinum', 20.00, 'finance'),
+  ('Platinum — service ceiling',      'category', 'Service',      'platinum', 25.00, 'finance'),
+  ('Platinum — subscription ceiling', 'category', 'Subscription', 'platinum', 30.00, 'finance')
+on conflict do nothing;
+
 -- ============================================================ warehouses
 
 insert into warehouses (name, code, region, priority) values
@@ -64,9 +83,11 @@ on conflict do nothing;
 -- ============================================================ demo customer
 -- Set `portal_user_id` to a real Clerk user ID to exercise the portal (B8).
 
-insert into customers (name, email, portal_user_id) values
-  ('Northwind Logistics', 'ops@northwind.example', null),
-  ('Helios Manufacturing', 'it@helios.example',    null)
+insert into customers (name, email, tier, portal_user_id) values
+  ('Northwind Logistics',  'ops@northwind.example',  'gold',     null),
+  ('Helios Manufacturing', 'it@helios.example',      'silver',   null),
+  ('Vertex Retail Group',  'procure@vertex.example', 'platinum', null),
+  ('Bluepeak Systems',     'admin@bluepeak.example', 'standard', null)
 on conflict do nothing;
 
 -- ============================================================ upsell rules
