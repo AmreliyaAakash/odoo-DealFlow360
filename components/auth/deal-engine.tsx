@@ -452,7 +452,7 @@ export function DealEngine({
       panel.removeEventListener("pointermove", onMove);
       panel.removeEventListener("pointerleave", onLeave);
       igniteRef.current = () => {};
-      scene.traverse((obj) => {
+      scene.traverse((obj: THREE.Object3D) => {
         const mesh = obj as THREE.Mesh;
         mesh.geometry?.dispose?.();
         const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
