@@ -10,7 +10,7 @@
       "area": "ui-create",
       "name": "row appears in the table after Create",
       "pass": true,
-      "detail": "8 -> 9 rows"
+      "detail": "15 -> 16 rows"
     },
     {
       "area": "ui-create",
@@ -116,6 +116,6 @@
     }
   ],
   "leftovers": [
-    "warehouses: \"E2E UI 3241676\" / code EU324167"
+    "warehouses: \"E2E UI 0602948\" / code EU060294"
   ]
 }

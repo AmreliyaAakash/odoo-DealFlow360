@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { currentRole } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions-server";
+import { AssistantWidget } from "@/components/assistant/assistant-widget";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { PermissionsProvider } from "./permissions-provider";
 import { loadWatchlist } from "./sidebar-data";
@@ -29,6 +30,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
         <DashboardSidebar role={role} watchlist={watchlist} />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
+      {/* Inside the provider, so the panel's quick questions and the tools it
+          calls are working from the same resolved access. */}
+      <AssistantWidget />
     </PermissionsProvider>
   );
 }

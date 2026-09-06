@@ -113,6 +113,40 @@ function seedLine(catalog: Product[], productId?: string): FormLine {
     : line;
 }
 
+/** A line asked for by a caller seeding the builder, before it is validated. */
+export type SeededLine = {
+  productId: string;
+  qty: number;
+  discountPct: number;
+};
+
+/**
+ * Lines seeded from outside — the assistant's prepared draft, today.
+ *
+ * The unit price is taken from the catalog rather than from whatever seeded the
+ * form: the seed says what to quote, never what it costs. Anything not matching
+ * a real product is dropped, so a stale or invented id opens a shorter form
+ * rather than a line pointing at nothing.
+ */
+function seedLines(catalog: Product[], seeded: SeededLine[]): FormLine[] {
+  const lines = seeded.flatMap((entry) => {
+    const product = catalog.find((candidate) => candidate.id === entry.productId);
+    if (!product) return [];
+
+    return [
+      {
+        ...freshLine(),
+        productId: product.id,
+        qty: entry.qty,
+        unitPrice: product.list_price,
+        discountPct: entry.discountPct,
+      },
+    ];
+  });
+
+  return lines.length > 0 ? lines : [freshLine()];
+}
+
 /**
  * B3 — the quotation builder, used to raise a quote at /quotations/new and to
  * edit an unsubmitted one at /quotations/[id].
@@ -129,6 +163,8 @@ export function QuotationForm({
   priceLists,
   draft,
   initialProductId,
+  initialCustomerId,
+  initialLines,
 }: {
   customers: CustomerOption[];
   catalog: Product[];
@@ -138,6 +174,13 @@ export function QuotationForm({
   draft?: QuotationDraft;
   /** Seeds the first line, for arriving from a suggestion. New quotes only. */
   initialProductId?: string;
+  /** Seeds the customer, for arriving from a prepared draft. New quotes only. */
+  initialCustomerId?: string;
+  /**
+   * Seeds every line at once. Takes precedence over `initialProductId`, and is
+   * ignored while editing — an existing quotation's own lines always win.
+   */
+  initialLines?: SeededLine[];
 }) {
   const router = useRouter();
   // The panel calls /api/upsell, which needs `upsellPanel: use`. Without the
@@ -149,7 +192,7 @@ export function QuotationForm({
   const inApproval = draft?.status === "pending_approval";
 
   const [customerId, setCustomerId] = useState<string | null>(
-    draft?.customerId ?? null,
+    draft?.customerId ?? initialCustomerId ?? null,
   );
   const [customerTouched, setCustomerTouched] = useState(false);
   const [reference, setReference] = useState(draft?.reference ?? "");
@@ -165,7 +208,9 @@ export function QuotationForm({
           subscriptionPlanId: line.subscriptionPlanId,
           touched: {},
         }))
-      : [seedLine(catalog, initialProductId)],
+      : initialLines && initialLines.length > 0
+        ? seedLines(catalog, initialLines)
+        : [seedLine(catalog, initialProductId)],
   );
 
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);

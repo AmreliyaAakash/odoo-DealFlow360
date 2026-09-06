@@ -18,7 +18,7 @@
         {
           "pass": true,
           "label": "count is +1 after CREATE",
-          "detail": "12 -> 13"
+          "detail": "14 -> 15"
         },
         {
           "pass": true,
@@ -33,12 +33,12 @@
         {
           "pass": true,
           "label": "UPDATE actually changed the stored value",
-          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+          "detail": "name = \"E2E-TEST-1788653795329-EDITED\""
         },
         {
           "pass": true,
           "label": "UPDATE did not change the count",
-          "detail": "13"
+          "detail": "15"
         },
         {
           "pass": true,
@@ -58,11 +58,11 @@
         {
           "pass": true,
           "label": "count still includes the retained row",
-          "detail": "12 -> 13"
+          "detail": "14 -> 15"
         }
       ],
-      "created": "0622de90-866e-46f1-b37c-7d0a34c28d7e",
-      "leftBehind": "products: id=0622de90-866e-46f1-b37c-7d0a34c28d7e name=E2E-TEST-1788641970480 (deactivated)"
+      "created": "1bf8d664-3dbc-4517-85ff-d2ff8f8974f4",
+      "leftBehind": "products: id=1bf8d664-3dbc-4517-85ff-d2ff8f8974f4 name=E2E-TEST-1788653795329 (deactivated)"
     },
     {
       "entity": "discount-rules",
@@ -75,7 +75,7 @@
         {
           "pass": true,
           "label": "count is +1 after CREATE",
-          "detail": "17 -> 18"
+          "detail": "19 -> 20"
         },
         {
           "pass": true,
@@ -90,12 +90,12 @@
         {
           "pass": true,
           "label": "UPDATE actually changed the stored value",
-          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+          "detail": "name = \"E2E-TEST-1788653795329-EDITED\""
         },
         {
           "pass": true,
           "label": "UPDATE did not change the count",
-          "detail": "18"
+          "detail": "20"
         },
         {
           "pass": true,
@@ -115,11 +115,11 @@
         {
           "pass": true,
           "label": "count still includes the retained row",
-          "detail": "17 -> 18"
+          "detail": "19 -> 20"
         }
       ],
-      "created": "825d2e77-3a3d-44e0-9b13-fa305bed3a9c",
-      "leftBehind": "discount-rules: id=825d2e77-3a3d-44e0-9b13-fa305bed3a9c name=E2E-TEST-1788641970480 (deactivated)"
+      "created": "13b90b93-937e-4927-b028-53bb7b33dfcb",
+      "leftBehind": "discount-rules: id=13b90b93-937e-4927-b028-53bb7b33dfcb name=E2E-TEST-1788653795329 (deactivated)"
     },
     {
       "entity": "warehouses",
@@ -132,7 +132,7 @@
         {
           "pass": true,
           "label": "count is +1 after CREATE",
-          "detail": "4 -> 5"
+          "detail": "16 -> 17"
         },
         {
           "pass": true,
@@ -147,12 +147,12 @@
         {
           "pass": true,
           "label": "UPDATE actually changed the stored value",
-          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+          "detail": "name = \"E2E-TEST-1788653795329-EDITED\""
         },
         {
           "pass": true,
           "label": "UPDATE did not change the count",
-          "detail": "5"
+          "detail": "17"
         },
         {
           "pass": true,
@@ -172,11 +172,11 @@
         {
           "pass": true,
           "label": "count still includes the retained row",
-          "detail": "4 -> 5"
+          "detail": "16 -> 17"
         }
       ],
-      "created": "4647a22b-7468-410e-bf94-c0856e3e84c7",
-      "leftBehind": "warehouses: id=4647a22b-7468-410e-bf94-c0856e3e84c7 name=E2E-TEST-1788641970480 (deactivated)"
+      "created": "f40d737b-7510-41d4-843c-b2fd24e4d9b6",
+      "leftBehind": "warehouses: id=f40d737b-7510-41d4-843c-b2fd24e4d9b6 name=E2E-TEST-1788653795329 (deactivated)"
     },
     {
       "entity": "subscriptions",
@@ -189,7 +189,7 @@
         {
           "pass": true,
           "label": "count is +1 after CREATE",
-          "detail": "5 -> 6"
+          "detail": "8 -> 9"
         },
         {
           "pass": true,
@@ -204,12 +204,12 @@
         {
           "pass": true,
           "label": "UPDATE actually changed the stored value",
-          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+          "detail": "name = \"E2E-TEST-1788653795329-EDITED\""
         },
         {
           "pass": true,
           "label": "UPDATE did not change the count",
-          "detail": "6"
+          "detail": "9"
         },
         {
           "pass": true,
@@ -229,11 +229,11 @@
         {
           "pass": true,
           "label": "count still includes the retained row",
-          "detail": "5 -> 6"
+          "detail": "8 -> 9"
         }
       ],
-      "created": "fb46e401-4262-4cfc-8f4a-d7a83a7ac329",
-      "leftBehind": "subscriptions: id=fb46e401-4262-4cfc-8f4a-d7a83a7ac329 name=E2E-TEST-1788641970480 (deactivated)"
+      "created": "50f790d2-981d-492f-ac9e-0b721366fc81",
+      "leftBehind": "subscriptions: id=50f790d2-981d-492f-ac9e-0b721366fc81 name=E2E-TEST-1788653795329 (deactivated)"
     },
     {
       "entity": "upsell-rules",
@@ -246,7 +246,7 @@
         {
           "pass": true,
           "label": "count is +1 after CREATE",
-          "detail": "4 -> 5"
+          "detail": "6 -> 7"
         },
         {
           "pass": true,
@@ -261,12 +261,12 @@
         {
           "pass": true,
           "label": "UPDATE actually changed the stored value",
-          "detail": "name = \"E2E-TEST-1788641970480-EDITED\""
+          "detail": "name = \"E2E-TEST-1788653795329-EDITED\""
         },
         {
           "pass": true,
           "label": "UPDATE did not change the count",
-          "detail": "5"
+          "detail": "7"
         },
         {
           "pass": true,
@@ -286,17 +286,17 @@
         {
           "pass": true,
           "label": "count still includes the retained row",
-          "detail": "4 -> 5"
+          "detail": "6 -> 7"
         }
       ],
-      "created": "7430c593-9439-4c9f-9279-9fbdab1d0110",
-      "leftBehind": "upsell-rules: id=7430c593-9439-4c9f-9279-9fbdab1d0110 name=E2E-TEST-1788641970480 (deactivated)"
+      "created": "ef32d23a-48f1-47c1-8926-6918de3de8bc",
+      "leftBehind": "upsell-rules: id=ef32d23a-48f1-47c1-8926-6918de3de8bc name=E2E-TEST-1788653795329 (deactivated)"
     },
     {
       "entity": "replenishment",
       "checks": [],
       "created": null,
-      "blocked": "Could not find the table 'public.replenishment_rules' in the schema cache"
+      "blocked": "no existing row to use as a template for the create payload"
     }
   ],
   "permissions": [
@@ -331,8 +331,8 @@
   ],
   "realtime": {
     "patchStatus": 200,
-    "rowsBefore": 14,
-    "rowsAfter": 14,
+    "rowsBefore": 16,
+    "rowsAfter": 16,
     "stillOnPage": true,
     "note": "row count is a coarse signal; the channel is confirmed by the socket staying open"
   }

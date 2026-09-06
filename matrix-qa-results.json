@@ -1,0 +1,652 @@
+[
+  {
+    "module": "products",
+    "role": "rep",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "products",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "products",
+    "role": "finance",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "products",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "products",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "discountRules",
+    "role": "rep",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "discountRules",
+    "role": "manager",
+    "capability": "write",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "discountRules",
+    "role": "finance",
+    "capability": "write",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": false,
+    "writeOk": false,
+    "pass": false
+  },
+  {
+    "module": "discountRules",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "discountRules",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouses",
+    "role": "rep",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouses",
+    "role": "manager",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouses",
+    "role": "finance",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouses",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouses",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "subscriptionPlans",
+    "role": "rep",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "subscriptionPlans",
+    "role": "manager",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "subscriptionPlans",
+    "role": "finance",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "subscriptionPlans",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "subscriptionPlans",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellRules",
+    "role": "rep",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellRules",
+    "role": "manager",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellRules",
+    "role": "finance",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellRules",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellRules",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "reports",
+    "role": "rep",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": null,
+    "readOk": true,
+    "writeOk": null,
+    "pass": true
+  },
+  {
+    "module": "reports",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": null,
+    "readOk": true,
+    "writeOk": null,
+    "pass": true
+  },
+  {
+    "module": "reports",
+    "role": "finance",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": null,
+    "readOk": true,
+    "writeOk": null,
+    "pass": true
+  },
+  {
+    "module": "reports",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": null,
+    "readOk": true,
+    "writeOk": null,
+    "pass": true
+  },
+  {
+    "module": "reports",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": null,
+    "readOk": true,
+    "writeOk": null,
+    "pass": true
+  },
+  {
+    "module": "quotationBuilder",
+    "role": "rep",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "quotationBuilder",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "quotationBuilder",
+    "role": "finance",
+    "capability": "view",
+    "readStatus": 200,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "quotationBuilder",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": 403,
+    "writeStatus": 403,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "quotationBuilder",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": 200,
+    "writeStatus": 400,
+    "readOk": true,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "approvals",
+    "role": "rep",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "approvals",
+    "role": "manager",
+    "capability": "write",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "approvals",
+    "role": "finance",
+    "capability": "write",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "approvals",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "approvals",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellPanel",
+    "role": "rep",
+    "capability": "use",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": false,
+    "pass": false
+  },
+  {
+    "module": "upsellPanel",
+    "role": "manager",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellPanel",
+    "role": "finance",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellPanel",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "upsellPanel",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouseSplit",
+    "role": "rep",
+    "capability": "write",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouseSplit",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": false,
+    "pass": false
+  },
+  {
+    "module": "warehouseSplit",
+    "role": "finance",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouseSplit",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "warehouseSplit",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "billing",
+    "role": "rep",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "billing",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "billing",
+    "role": "finance",
+    "capability": "write",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "billing",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "billing",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "dealHealth",
+    "role": "rep",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "dealHealth",
+    "role": "manager",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "dealHealth",
+    "role": "finance",
+    "capability": "view",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "dealHealth",
+    "role": "customer",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "dealHealth",
+    "role": "admin",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "customerPortal",
+    "role": "rep",
+    "capability": "write",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "customerPortal",
+    "role": "manager",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "customerPortal",
+    "role": "finance",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 403,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "customerPortal",
+    "role": "customer",
+    "capability": "full",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": true,
+    "pass": true
+  },
+  {
+    "module": "customerPortal",
+    "role": "admin",
+    "capability": "none",
+    "readStatus": null,
+    "writeStatus": 400,
+    "readOk": null,
+    "writeOk": false,
+    "pass": false
+  }
+]

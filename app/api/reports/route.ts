@@ -64,7 +64,15 @@ export async function GET(request: Request) {
  * look right and be useless — the recipient could not sum a column — so the
  * currency lives in the cell's number format instead.
  */
-const INR_FORMAT = '"₹"#,##0';
+/**
+ * Indian grouping, which `#,##0` does not give: that is western thousands, so
+ * the same figure the screen showed as ₹4,87,892 arrived in the spreadsheet as
+ * ₹487,892. Excel has no locale-aware token for lakh/crore, so the grouping is
+ * spelled out as three conditional sections — crore, lakh, and below a lakh,
+ * where the two conventions agree and one comma is all that is needed.
+ */
+const INR_FORMAT =
+  '[>=10000000]"₹"##\\,##\\,##\\,##0;[>=100000]"₹"##\\,##\\,##0;"₹"##,##0';
 const PCT_FORMAT = "0.0%";
 const DATE_FORMAT = "dd mmm yyyy";
 
