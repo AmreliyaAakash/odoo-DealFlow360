@@ -160,6 +160,15 @@ export type BuilderActor = {
   /** Whether the order and its invoices may be read, and orders raised. */
   canViewBilling: boolean;
   canWriteBilling: boolean;
+  /**
+   * Whether this account may post into a customer conversation at all.
+   *
+   * Reading the thread is not gated on this — a manager or finance user sees
+   * every thread through `quotationBuilder` — but writing into one is the
+   * portal module, which only a rep and the customer hold. The caller must
+   * still check that the quotation is theirs.
+   */
+  canMessage: boolean;
 };
 
 /**
@@ -185,5 +194,6 @@ export async function requireBuilderAccess(): Promise<BuilderActor> {
     canCommitSplit: canWith(access, "warehouseSplit", "write"),
     canViewBilling: canWith(access, "billing", "view"),
     canWriteBilling: canWith(access, "billing", "write"),
+    canMessage: canWith(access, "customerPortal", "write"),
   };
 }

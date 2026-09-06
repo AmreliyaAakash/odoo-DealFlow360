@@ -26,6 +26,7 @@ import {
   PanelHeader,
   Th,
 } from "@/components/dashboard/panel";
+import { CustomerMessagePanel } from "@/components/negotiation/message-panel";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { TierBadge } from "@/components/dashboard/tier-badge";
 import { loadBuilderData, requireBuilderAccess } from "../builder-data";
@@ -81,6 +82,21 @@ type QuotationRow = {
 };
 
 /**
+ * The same row from a database that predates `customers.tier` and
+ * `quotation_lines.subscription_plan_id` — the two columns the fallback query
+ * below leaves out. Spelled as its own type rather than `any` so the mapping
+ * back to QuotationRow is checked: those two fields are the only ones it is
+ * allowed to invent.
+ */
+type LegacyQuotationRow = Omit<QuotationRow, "customers" | "quotation_lines"> & {
+  customers: { id: string; name: string | null } | null;
+  quotation_lines: Omit<
+    QuotationRow["quotation_lines"][number],
+    "subscription_plan_id"
+  >[];
+};
+
+/**
  * B3 — one quotation.
  *
  * The same form as /quotations/new while the quote is still a draft, and a
@@ -119,7 +135,7 @@ export default async function QuotationPage({
          quotation_lines(id, product_id, qty, discount_pct, unit_price)`,
       )
       .eq("id", id)
-      .maybeSingle<any>();
+      .maybeSingle<LegacyQuotationRow>();
 
     if (fallback.error || !fallback.data) return res;
 
@@ -130,8 +146,8 @@ export default async function QuotationPage({
       customers: row.customers
         ? { id: row.customers.id, name: row.customers.name, tier: "standard" }
         : null,
-      quotation_lines: (row.quotation_lines ?? []).map((l: any) => ({
-        ...l,
+      quotation_lines: (row.quotation_lines ?? []).map((line) => ({
+        ...line,
         subscription_plan_id: null,
       })),
     };
@@ -139,7 +155,7 @@ export default async function QuotationPage({
     return { data: formatted, error: null };
   })();
 
-  const [quotationResult, decisionsResult, data] = await Promise.all([
+  const [quotationResult, decisionsResult, data, messageResult] = await Promise.all([
     quotationPromise,
     supabase
       .from("approvals")
@@ -148,7 +164,16 @@ export default async function QuotationPage({
       .order("decided_at", { ascending: true })
       .returns<DecisionRow[]>(),
     loadBuilderData(),
+    // Head-only count, so the collapsed panel can say how many messages are
+    // waiting without the page loading the conversation nobody has opened yet.
+    supabase
+      .from("negotiation_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("quotation_id", id),
   ]);
+
+  // A count is decoration on this page; a failure must not take the quote down.
+  const messageCount = messageResult.count ?? 0;
 
   if (quotationResult.error) {
     throw new Error(`Failed to load quotation: ${quotationResult.error.message}`);
@@ -309,6 +334,21 @@ export default async function QuotationPage({
           }
         />
       )}
+
+      {/*
+        The customer conversation, on the desk side.
+
+        Every staff role that can open this page can read it — the API and the
+        RLS policy behind it both key on `quotationBuilder`, so a rep at `own`
+        scope only ever resolves their own threads while a manager, finance user
+        or admin resolves all of them. Posting is narrower: the portal module,
+        and only on a quotation this rep owns. Everyone else reads.
+      */}
+      <CustomerMessagePanel
+        quotationId={quotation.id}
+        canPost={actor.canMessage && quotation.rep_id === actor.userId}
+        initialCount={messageCount}
+      />
     </main>
   );
 }

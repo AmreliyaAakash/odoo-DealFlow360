@@ -1,18 +1,30 @@
-import { UserButton } from "@clerk/nextjs";
-import { BrandMark } from "@/components/brand-mark";
-import { SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarBlankIcon, ReceiptIcon } from "@phosphor-icons/react/dist/ssr";
 import { PORTAL_STAGE_LABELS } from "@/lib/business-logic";
-import { formatCurrency } from "@/lib/quotations";
+import { formatCurrency, formatPercent } from "@/lib/quotations";
 import { requirePortalIdentity } from "../guard";
+import { loadPortalQuotes } from "../quote-list";
+import {
+  PortalCard,
+  PortalShell,
+  Stat,
+  StagePill,
+  daysUntil,
+  portalDate,
+} from "../shell";
 import { loadPortalQuote } from "./data";
 import { QuoteStepper } from "./quote-stepper";
-import { ConfirmBar } from "./confirm-bar";
 import { QuoteView } from "./quote-view";
 
 /**
- * B8 — the customer's view of one quotation. Standalone: no dashboard sidebar,
- * sky accent, and nothing internal on the page — no cost, margin, risk score or
- * approval state, all of which RLS would hand over but the customer must not see.
+ * B8 — the customer's view of one quotation.
+ *
+ * Nothing internal on the page — no cost, margin, risk score or approval
+ * state, all of which RLS would hand over but the customer must not see.
+ *
+ * Laid out the way a purchasing manager reads a supplier's document: what it
+ * is and what it costs at the top, where it has got to, then the decision they
+ * are being asked to make, then the detail, with the conversation beside it
+ * throughout. Every figure the page shows is one the desk sees too.
  */
 export default async function PortalQuotePage({
   params,
@@ -41,81 +53,115 @@ export default async function PortalQuotePage({
 
   const { quote } = result;
 
+  // Decides whether the breadcrumb offers a way back: the list redirects
+  // straight through when there is only one quotation to list.
+  const { quotes } = await loadPortalQuotes(access.identity);
+  const hasOthers = quotes.length > 1;
+
+  const validUntil = portalDate(quote.validUntil);
+  const daysLeft = daysUntil(quote.validUntil);
+  const discountPct =
+    quote.subtotal > 0 ? quote.discountTotal / quote.subtotal : 0;
+
+  const stage = quote.closedLost
+    ? { label: "Closed", tone: "closed" as const }
+    : quote.settled
+      ? { label: PORTAL_STAGE_LABELS[quote.stage], tone: "done" as const }
+      : { label: PORTAL_STAGE_LABELS[quote.stage], tone: "open" as const };
+
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <BrandMark size="md" priority />
-        <div className="min-w-0 pl-3 border-l border-border">
-          <p className="text-xs font-semibold text-foreground">
-            Customer Portal
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {quote.customerName}
-          </p>
-        </div>
-        <div className="ml-auto">
-          <UserButton />
-        </div>
-      </header>
-
-      {/* Hero: reference, value and where the quote has got to. */}
-      <section className="rounded-2xl bg-card p-5 ring-1 ring-foreground/10 sm:p-6">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
-              Quotation
-            </p>
-            <h1 className="text-lg font-semibold tracking-tight">
-              {quote.reference}
+    <PortalShell
+      customerName={quote.customerName}
+      crumbs={[
+        { label: "Quotations", href: hasOthers ? "/portal" : undefined },
+        { label: quote.reference },
+      ]}
+    >
+      {/* Page header: what this is, what it costs, and where it stands. */}
+      <div className="flex flex-wrap items-end gap-6">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Quotation {quote.reference}
             </h1>
+            <StagePill label={stage.label} tone={stage.tone} />
           </div>
-
-          <div className="ml-auto text-right">
-            <p className="text-[11px] tracking-wide text-muted-foreground uppercase">
-              Total
-            </p>
-            <p className="text-2xl font-semibold tracking-tight tabular-nums">
-              {formatCurrency(quote.netTotal)}
-            </p>
-          </div>
-        </div>
-
-        {quote.closedLost ? (
-          <p className="mt-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-700 ring-1 ring-red-500/30 dark:text-red-400">
-            This quotation is closed and can no longer be changed. Speak to your
-            account manager if you would like a new one.
-          </p>
-        ) : (
-          <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <SealCheckIcon size={14} className="text-sky-500" />
-            Currently
-            <span className="font-medium text-sky-600 dark:text-sky-400">
-              {PORTAL_STAGE_LABELS[quote.stage]}
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <ReceiptIcon size={13} />
+              Prepared for {quote.customerName}
             </span>
-            {quote.validUntil ? (
-              <span className="text-muted-foreground">
-                · valid until{" "}
-                {new Date(quote.validUntil).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+            {validUntil ? (
+              <span className="flex items-center gap-1.5">
+                <CalendarBlankIcon size={13} />
+                Valid until {validUntil}
               </span>
             ) : null}
           </p>
-        )}
-
-        <div className="mt-6">
-          <QuoteStepper stage={quote.stage} closedLost={quote.closedLost} />
         </div>
-      </section>
 
-      {/* Above the lines: the customer should see what they can do before they
-          finish reading what they are being asked to pay. */}
-      {quote.closedLost ? null : <ConfirmBar quote={quote} />}
+        <div className="rounded-2xl bg-foreground px-5 py-4 text-background shadow-sm">
+          <p className="text-[11px] tracking-wide uppercase opacity-70">Total payable</p>
+          <p className="mt-0.5 text-3xl font-semibold tracking-tight tabular-nums">
+            {formatCurrency(quote.netTotal)}
+          </p>
+          <p className="mt-0.5 text-[11px] opacity-70">
+            Inclusive of all line discounts
+          </p>
+        </div>
+      </div>
+
+      {/* The figures a reader checks before anything else. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat
+          label="Items"
+          value={String(quote.lines.length)}
+          hint={quote.lines.length === 1 ? "line on this quotation" : "lines on this quotation"}
+        />
+        <Stat label="Subtotal" value={formatCurrency(quote.subtotal)} hint="Before discounts" />
+        <Stat
+          label="Discount"
+          value={quote.discountTotal > 0 ? `− ${formatCurrency(quote.discountTotal)}` : "—"}
+          hint={quote.discountTotal > 0 ? `${formatPercent(discountPct)} of subtotal` : "No discount applied"}
+          tone={quote.discountTotal > 0 ? "positive" : "muted"}
+        />
+        <Stat
+          label="Validity"
+          value={
+            quote.closedLost
+              ? "Closed"
+              : daysLeft === null
+                ? "—"
+                : daysLeft < 0
+                  ? "Expired"
+                  : daysLeft === 0
+                    ? "Today"
+                    : `${daysLeft} day${daysLeft === 1 ? "" : "s"}`
+          }
+          hint={validUntil ? `Until ${validUntil}` : undefined}
+          tone={
+            quote.closedLost
+              ? "muted"
+              : daysLeft !== null && daysLeft <= 7
+                ? "warning"
+                : undefined
+          }
+        />
+      </div>
+
+      <PortalCard
+        title="Progress"
+        caption={
+          quote.closedLost
+            ? "This quotation is closed and will not move further."
+            : `Currently ${PORTAL_STAGE_LABELS[quote.stage].toLowerCase()}`
+        }
+      >
+        <QuoteStepper stage={quote.stage} closedLost={quote.closedLost} />
+      </PortalCard>
 
       <QuoteView quote={quote} />
-    </main>
+    </PortalShell>
   );
 }
 

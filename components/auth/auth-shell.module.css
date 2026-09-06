@@ -1,0 +1,530 @@
+/* ---------------------------------------------------------------------------
+   Auth shell — the dark two-panel sign-in / sign-up screen.
+   Left: brand + glass card (Clerk renders the form inside).
+   Right: the 3D deal engine with floating data cards and copy.
+   --------------------------------------------------------------------------- */
+
+.page {
+  --bg: #06080b;
+  --bg-deep: #030405;
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-strong: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: #f2f4f7;
+  --text-secondary: #98a2b3;
+  --text-tertiary: #667085;
+  --accent: #33c8e8;
+  --accent-soft: rgba(51, 200, 232, 0.16);
+  --accent-ink: #04141a;
+  --violet: #8b7cf6;
+  --success: #34d399;
+  --amber: #e8b95c;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(400px, 45fr) 55fr;
+  background: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page :global(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.page :global(input:focus-visible) {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- LEFT: SIGN-IN PANEL ---------- */
+
+.authPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Never scrolls: the card is scaled down to fit instead (see AuthShell). */
+  overflow: hidden;
+  padding: 24px 48px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  width: fit-content;
+}
+
+/* Both images are dark-on-transparent, so they are inverted for the dark panel. */
+.brandMark {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+.brandName {
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+.authCenter {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.authCard {
+  --fit: 1;
+  width: 100%;
+  max-width: 380px;
+  flex: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 32px;
+  transform: scale(var(--fit));
+  transform-origin: center;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  animation: authCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Same entrance as cardIn, but keeps the fit scale while it plays. */
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(var(--fit));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(var(--fit));
+  }
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.heading {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+.subheading {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.footNote {
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+.footNote a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.footNote a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.captcha {
+  margin-top: 12px;
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+.captcha:empty {
+  display: none;
+}
+
+/* ---------- Clerk element overrides (passed via appearance.elements) ---------- */
+
+.clerkRoot {
+  width: 100%;
+}
+.clerkCard {
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  padding: 0;
+  gap: 0;
+}
+.clerkHidden {
+  display: none;
+}
+.clerkLabel {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.clerkInput {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 11px 14px;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.clerkInput::placeholder {
+  color: var(--text-tertiary);
+}
+.clerkInput:focus,
+.clerkInput:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.clerkInputGroup {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.clerkInputGroup:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.clerkInputGroup .clerkInput,
+.clerkInputGroup .clerkInput:focus {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.clerkShowPassword {
+  color: var(--text-tertiary);
+}
+.clerkShowPassword:hover {
+  color: var(--text-secondary);
+}
+.clerkPrimary {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: none;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.clerkPrimary:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.clerkPrimary:active {
+  transform: translateY(0);
+}
+.clerkPrimary:disabled {
+  opacity: 0.75;
+  transform: none;
+}
+.clerkSocial {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  box-shadow: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.clerkSocial:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.045);
+}
+.clerkSocialText {
+  color: var(--text-primary);
+  font-weight: 400;
+}
+.clerkDividerLine {
+  background: var(--border);
+}
+.clerkDividerText {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.clerkLink {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  border-bottom: 1px solid transparent;
+}
+.clerkLink:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  text-decoration: none;
+}
+.clerkFooter {
+  background: transparent;
+  margin-top: 14px;
+}
+.clerkFooterItem {
+  background: transparent;
+  padding: 0;
+  justify-content: center;
+}
+.clerkFooterText {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.clerkFooterLink {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+.clerkFooterLink:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.clerkAlert {
+  background: rgba(232, 185, 92, 0.08);
+  border: 1px solid rgba(232, 185, 92, 0.3);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+.clerkAlertText {
+  color: var(--amber);
+  font-size: 12.5px;
+}
+.clerkErrorText {
+  color: var(--amber);
+}
+.clerkMuted {
+  color: var(--text-secondary);
+}
+.clerkOtpInput {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.clerkOtpInput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- RIGHT: 3D DEAL ENGINE ---------- */
+
+.enginePanel {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 62% 42%, rgba(51, 200, 232, 0.1), transparent 62%),
+    radial-gradient(ellipse 60% 50% at 18% 92%, rgba(139, 124, 246, 0.1), transparent 60%),
+    var(--bg-deep);
+}
+
+.engineCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.engineCanvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Shown only if WebGL is unavailable */
+.engineFallback canvas {
+  display: none;
+}
+.engineFallback::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 60% 44%,
+      transparent 30%,
+      rgba(51, 200, 232, 0.3) 30.4%,
+      rgba(51, 200, 232, 0.3) 30.8%,
+      transparent 31.2%
+    ),
+    radial-gradient(
+      circle at 60% 44%,
+      transparent 22%,
+      rgba(139, 124, 246, 0.25) 22.4%,
+      rgba(139, 124, 246, 0.25) 22.8%,
+      transparent 23.2%
+    );
+}
+
+.engineCopy {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  bottom: 40px;
+  max-width: 520px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (max-height: 820px) {
+  .engineCopy {
+    bottom: 30px;
+  }
+  .engineHeadline {
+    font-size: 22px;
+  }
+  .chips {
+    margin-top: 12px;
+  }
+}
+
+.engineHeadline {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(6, 8, 11, 0.55);
+  backdrop-filter: blur(8px);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.dataCard {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: rgba(6, 8, 11, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  animation: cardIn 0.6s ease forwards;
+}
+
+.dataCard strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  display: block;
+  font-size: 13px;
+}
+
+.c1 {
+  top: 11%;
+  right: 9%;
+  animation-delay: 1.1s;
+}
+.c2 {
+  top: 47%;
+  left: 7%;
+  animation-delay: 1.4s;
+}
+.c3 {
+  bottom: 27%;
+  right: 12%;
+  animation-delay: 1.7s;
+}
+
+/* ---------- RESPONSIVE ---------- */
+
+@media (max-width: 900px) {
+  .page {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    grid-template-columns: 1fr;
+    grid-template-rows: 340px auto;
+  }
+  .authPanel {
+    overflow: visible;
+  }
+  .authCard {
+    transform: none;
+  }
+  .enginePanel {
+    order: -1;
+  }
+  .authPanel {
+    padding: 28px 20px 40px;
+    border-right: none;
+  }
+  .engineCopy {
+    left: 24px;
+    right: 24px;
+    bottom: 24px;
+  }
+  .engineHeadline {
+    font-size: 20px;
+  }
+  .chips {
+    display: none;
+  }
+  .c2,
+  .c3 {
+    display: none;
+  }
+  .c1 {
+    top: 16px;
+    right: 16px;
+  }
+}

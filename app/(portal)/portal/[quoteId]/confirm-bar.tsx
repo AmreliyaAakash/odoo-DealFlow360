@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircleIcon, HandshakeIcon } from "@phosphor-icons/react";
+import {
+  CheckCircleIcon,
+  ClockCountdownIcon,
+  HandshakeIcon,
+} from "@phosphor-icons/react";
 import { formatCurrency, formatPercent } from "@/lib/quotations";
+import { cn } from "@/lib/utils";
 import { PORTAL_ACCENT, type PortalQuote } from "./types";
 
 /**
@@ -14,7 +19,7 @@ import { PORTAL_ACCENT, type PortalQuote } from "./types";
  * page would leave the customer hunting for the second half.
  *
  * Confirming is only offered on a quotation the desk has already cleared. While
- * a counter is with approvals the button says so rather than disappearing — a
+ * a counter is with approvals the card says so rather than hiding the button — a
  * customer who has just asked for more needs to know their request is moving,
  * not wonder whether the page broke.
  */
@@ -80,40 +85,50 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
 
   if (settled) {
     return (
-      <section className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 p-4 text-xs text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-400">
-        <CheckCircleIcon size={16} weight="fill" />
-        <span>
-          You confirmed this quotation. Nothing further is needed from you.
-          {quote.requestedDeliveryDate ? (
-            <> Delivery requested by {quote.requestedDeliveryDate}.</>
-          ) : null}
-        </span>
+      <section className="flex items-start gap-3 rounded-2xl bg-emerald-500/10 p-5 text-xs text-emerald-800 ring-1 ring-emerald-500/30 dark:text-emerald-300">
+        <CheckCircleIcon size={18} weight="fill" className="mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold">You have confirmed this quotation</p>
+          <p className="mt-0.5">
+            Nothing further is needed from you.
+            {quote.requestedDeliveryDate ? (
+              <> Delivery requested by {quote.requestedDeliveryDate}.</>
+            ) : null}
+          </p>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0">
+    <section className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-sky-500/30">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border/60 bg-sky-500/5 px-5 py-3.5">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Your decision</h2>
           <p className="text-[11px] text-muted-foreground">
-            {formatCurrency(quote.netTotal)} · currently{" "}
-            {formatPercent(quote.maxDiscountPct / 100)} off
+            {formatCurrency(quote.netTotal)} at{" "}
+            {formatPercent(quote.maxDiscountPct / 100)} off list — accept these
+            terms, or ask for better ones.
           </p>
         </div>
-
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-muted-foreground">
-            Requested delivery date
+        {awaitingDesk ? (
+          <span className="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-500/25 dark:text-amber-400">
+            <ClockCountdownIcon size={12} />
+            With our desk
           </span>
+        ) : null}
+      </header>
+
+      <div className="flex flex-wrap items-end gap-4 p-5">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] text-muted-foreground">Requested delivery date</span>
           <input
             type="date"
             value={deliveryDate}
             min={today()}
             onChange={(event) => setDeliveryDate(event.target.value)}
             disabled={!confirmable || busy !== null}
-            className="h-8 rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent focus-visible:bg-background focus-visible:ring-sky-500 disabled:opacity-50"
+            className="h-9 rounded-lg border border-border bg-background px-2.5 text-xs outline-none transition focus-visible:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/30 disabled:opacity-50"
           />
         </label>
 
@@ -122,9 +137,12 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
             type="button"
             onClick={() => setCountering((open) => !open)}
             disabled={busy !== null}
-            className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium transition-colors hover:bg-muted/70 disabled:opacity-50"
+            className={cn(
+              "flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50",
+              countering && "bg-muted",
+            )}
           >
-            <HandshakeIcon size={13} />
+            <HandshakeIcon size={14} />
             {countering ? "Cancel" : "Counter the discount"}
           </button>
 
@@ -137,70 +155,82 @@ export function ConfirmBar({ quote }: { quote: PortalQuote }) {
                 ? undefined
                 : "Available once this quotation clears our approvals desk"
             }
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+            className="flex h-9 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-40"
             style={{ background: PORTAL_ACCENT }}
           >
-            <CheckCircleIcon size={13} weight="fill" />
+            <CheckCircleIcon size={14} weight="fill" />
             {busy === "confirm"
-              ? "Confirming..."
+              ? "Confirming…"
               : awaitingDesk
-                ? "With our desk"
+                ? "Awaiting our desk"
                 : "Confirm quotation"}
           </button>
         </div>
+
+        {!confirmable && !awaitingDesk ? (
+          <p className="w-full text-[11px] text-muted-foreground">
+            Confirmation opens once this quotation clears our approvals desk.
+          </p>
+        ) : null}
       </div>
 
       {countering ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border/60 pt-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-muted-foreground">
-              Discount you are asking for
-            </span>
-            <span className="flex items-center gap-1">
+        <div className="border-t border-border/60 bg-muted/30 px-5 py-4">
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            Tell us the discount you are asking for. Anything within our
+            thresholds is applied straight away; anything beyond them goes to
+            the desk and we come back to you.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-muted-foreground">Discount requested</span>
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={requested}
+                  onChange={(event) => setRequested(event.target.value)}
+                  placeholder={String(Math.ceil(quote.maxDiscountPct + 1))}
+                  className="h-9 w-24 rounded-lg border border-border bg-background px-2.5 text-xs tabular-nums outline-none transition focus-visible:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/30"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </span>
+            </label>
+
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-[11px] text-muted-foreground">
+                Anything we should know (optional)
+              </span>
               <input
-                type="number"
-                min={0}
-                max={100}
-                value={requested}
-                onChange={(event) => setRequested(event.target.value)}
-                placeholder={String(Math.ceil(quote.maxDiscountPct + 1))}
-                className="h-8 w-24 rounded-lg bg-muted/60 px-2 text-xs tabular-nums outline-none ring-1 ring-transparent focus-visible:bg-background focus-visible:ring-sky-500"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Budget is fixed this quarter…"
+                className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs outline-none transition focus-visible:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500/30"
               />
-              <span className="text-xs text-muted-foreground">%</span>
-            </span>
-          </label>
+            </label>
 
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-[11px] text-muted-foreground">
-              Anything we should know (optional)
-            </span>
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Budget is fixed this quarter…"
-              className="h-8 w-full rounded-lg bg-muted/60 px-2 text-xs outline-none ring-1 ring-transparent focus-visible:bg-background focus-visible:ring-sky-500"
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={() => void act("counter")}
-            disabled={requested === "" || busy !== null}
-            className="h-8 rounded-lg px-3 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-            style={{ background: PORTAL_ACCENT }}
-          >
-            {busy === "counter" ? "Sending..." : "Submit request"}
-          </button>
+            <button
+              type="button"
+              onClick={() => void act("counter")}
+              disabled={requested === "" || busy !== null}
+              className="h-9 rounded-lg px-4 text-xs font-semibold text-white shadow-sm transition-opacity disabled:opacity-40"
+              style={{ background: PORTAL_ACCENT }}
+            >
+              {busy === "counter" ? "Sending…" : "Submit request"}
+            </button>
+          </div>
         </div>
       ) : null}
 
       {message ? (
         <p
-          className={
+          className={cn(
+            "border-t border-border/60 px-5 py-3 text-[11px]",
             message.tone === "ok"
-              ? "mt-3 text-[11px] text-emerald-600 dark:text-emerald-400"
-              : "mt-3 text-[11px] text-red-600 dark:text-red-400"
-          }
+              ? "bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"
+              : "bg-red-500/5 text-red-600 dark:text-red-400",
+          )}
         >
           {message.text}
         </p>
